@@ -1,0 +1,279 @@
+{
+  "project_name": "Pharma360",
+  "app_type": "e-commerce parapharmacy",
+  "location": "Algeria",
+  "currency": "DA",
+  "theme": {
+    "primary_mode": "light",
+    "archetype": "ORGANIC & EARTHY / SWISS HYBRID",
+    "description": "Clean, luminous, medical-grade parapharmacy aesthetic with soft mint green accents, fresh white backgrounds, crisp slate borders, and vibrant wellness contrast."
+  },
+  "brand_identity": {
+    "name": "Pharma360",
+    "tagline": "Votre Parapharmacie en Ligne N°1 en Algérie",
+    "core_values": [
+      "Produits 100% Originaux Certifiés",
+      "Livraison Express 58 Wilayas",
+      "Conseil Pharmaceutique & Bien-Être",
+      "Paiement Sécurisé (À la livraison ou par Carte CIB / CCT / Edahabia)"
+    ],
+    "contact": {
+      "phone": "+213 550 360 360",
+      "phone_display": "0550 36 03 60",
+      "whatsapp": "+213 550 360 360",
+      "email": "contact@pharma360-dz.com",
+      "address": "12 Boulevard Mohamed V, Alger Centre, Algérie",
+      "horaires": "7j/7 - 08h00 à 22h00"
+    }
+  },
+  "colors": {
+    "mint_50": "#ECFDF5",
+    "mint_100": "#D1FAE5",
+    "mint_200": "#A7F3D0",
+    "mint_500": "#10B981",
+    "mint_600": "#059669",
+    "mint_700": "#047857",
+    "mint_800": "#065F46",
+    "mint_900": "#064E3B",
+    "emerald_accent": "#0D9488",
+    "warm_beige": "#FAF9F6",
+    "sage_tint": "#F0F7F4",
+    "slate_dark": "#0F172A",
+    "slate_muted": "#475569",
+    "slate_light": "#94A3B8",
+    "border_subtle": "#E2E8F0",
+    "promo_red": "#EF4444",
+    "promo_bg": "#FEF2F2",
+    "badge_nouveau": "#3B82F6",
+    "white_surface": "#FFFFFF",
+    "overlay_dark": "rgba(15, 23, 42, 0.45)"
+  },
+  "typography": {
+    "headings": {
+      "font_family": "'Plus Jakarta Sans', 'Outfit', sans-serif",
+      "weights": "font-bold (700) or font-extrabold (800)",
+      "letter_spacing": "tracking-tight"
+    },
+    "body": {
+      "font_family": "'DM Sans', 'Inter', sans-serif",
+      "weights": "font-normal (400) or font-medium (500)",
+      "line_height": "leading-relaxed"
+    },
+    "mono_labels": {
+      "font_family": "'JetBrains Mono', monospace",
+      "casing": "uppercase",
+      "tracking": "tracking-wider"
+    },
+    "sizes": {
+      "h1_hero": "text-3xl sm:text-4xl md:text-5xl lg:text-6xl",
+      "h2_section": "text-2xl sm:text-3xl md:text-4xl",
+      "h3_card": "text-lg sm:text-xl md:text-2xl",
+      "body": "text-sm sm:text-base",
+      "caption": "text-xs sm:text-sm"
+    }
+  },
+  "layout_and_navigation": {
+    "top_reassurance_bar": {
+      "bg_color": "#064E3B",
+      "text_color": "#D1FAE5",
+      "items": [
+        "🚚 Livraison rapide dans les 58 Wilayas d'Algérie",
+        "🛡️ Produits 100% Originaux & Authentiques",
+        "⚡ Expédition Express sous 24h-48h",
+        "📞 Service Client & Conseils : 0550 36 03 60"
+      ]
+    },
+    "fixed_header": {
+      "style": "sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-emerald-100 shadow-sm",
+      "elements": [
+        "Logo Pharma360 avec symbole croix santé stylisée en feuille de menthe",
+        "Barre de recherche dynamique avec auto-suggestions instantanées (produits, marques, besoins)",
+        "Bouton téléphone cliquable direct avec icône tel (0550 36 03 60)",
+        "Icône Mon compte (connexion / inscription / profil)",
+        "Icône Panier flottant avec badge compteur d'articles et total dynamique en DA"
+      ]
+    },
+    "main_categories_menu": [
+      { "id": "sante", "label": "Santé", "icon": "HeartPulse" },
+      { "id": "visage", "label": "Visage", "icon": "Sparkles" },
+      { "id": "corps", "label": "Corps", "icon": "UserCheck" },
+      { "id": "cheveux", "label": "Cheveux", "icon": "Scissors" },
+      { "id": "solaires", "label": "Solaires", "icon": "Sun" },
+      { "id": "hygiene", "label": "Hygiène", "icon": "ShieldCheck" },
+      { "id": "maquillage", "label": "Maquillage", "icon": "Palette" },
+      { "id": "kbeauty", "label": "K-Beauty", "icon": "Flower2" }
+    ]
+  },
+  "homepage_sections": {
+    "hero_banner": {
+      "type": "Dynamic Banner Carousel / Split Hero",
+      "badge": "Offres Spéciales Parapharmacie Algérie",
+      "headline": "Prenez soin de votre peau & santé au meilleur prix en DA",
+      "cta": "Découvrir les promos du mois",
+      "reassurance_badges": ["Livraison 58 Wilayas", "Paiement à la livraison", "100% Produit Certifié"]
+    },
+    "nos_offres_promo": {
+      "title": "🔥 Nos Offres Incroyables",
+      "subtitle": "Profitez de réductions exclusives avec prix barrés en Dinar Algérien",
+      "badge": "PROMO",
+      "card_features": [
+        "Badge -XX% en rouge vif",
+        "Prix barré gris + Prix promo vert mint",
+        "Bouton Ajout rapide au panier avec feedback animation",
+        "Indicateur de stock"
+      ]
+    },
+    "nouvel_arrivage": {
+      "title": "✨ Nouveautés Parapharmaceutiques",
+      "subtitle": "Les derniers soins et innovations beauté débarquent chez Pharma360",
+      "badge": "NOUVEAU",
+      "badge_color": "bg-blue-600 text-white"
+    },
+    "categories_grid": {
+      "title": "Explorez par Catégorie",
+      "subtitle": "Trouvez le soin adapté à vos besoins spécifiques",
+      "card_style": "High-contrast clean card with rounded corners, subtle hover lift, background mint glow"
+    },
+    "coups_de_coeur": {
+      "title": "💚 Les Coups de Cœur Pharma360",
+      "subtitle": "Sélectionnés et approuvés par nos pharmaciens experts",
+      "card_style": "Highlighted card with pharmacist seal badge"
+    },
+    "marques_partenaires": {
+      "title": "Nos Marques Références",
+      "subtitle": "Les plus grands laboratoires parapharmaceutiques disponibles en Algérie",
+      "brands": [
+        "La Roche-Posay",
+        "CeraVe",
+        "Avène",
+        "Vichy",
+        "Bioderma",
+        "The Ordinary",
+        "SVR",
+        "Nuxe",
+        "Eucerin",
+        "Isdin"
+      ]
+    },
+    "blog_conseils": {
+      "title": "Le Blog Santé & Conseils Beauté",
+      "subtitle": "Astuces et guides rédigés par nos spécialistes pour prendre soin de vous au quotidien"
+    }
+  },
+  "page_routes_and_views": [
+    "Accueil (Home)",
+    "Catalogue / Catégories (Filtres par marque, prix en DA, besoin, type de peau, tri)",
+    "Fiche Produit (Photos haute résolution, stock, composition, conseils d'utilisation, avis, ajout panier)",
+    "Panier (Gestion des quantités, code promo DZ, calcul frais de livraison par Wilaya)",
+    "Commande / Checkout (Paiement à la livraison COD / Carte CIB & Edahabia online)",
+    "Espace Client (Connexion, Inscription, Historique commandes, Mes adresses Algérie)",
+    "Page Marques individuelles (ex: /marques/la-roche-posay)",
+    "Blog & Articles Santé/Conseils",
+    "Contact & Carte de géolocalisation d'Alger",
+    "Panneau Admin Back-Office (Gestion produits, prix DA, stocks, promotions, commandes clients)"
+  ],
+  "image_urls": {
+    "hero_banners": [
+      {
+        "url": "https://images.unsplash.com/photo-1728727267814-792db55ce678?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2Mzl8MHwxfHNlYXJjaHwyfHxwaGFybWFjeSUyMHNraW5jYXJlJTIwYmFubmVyJTIwbW9kZWwlMjBmYWNlJTIwY3JlYW18ZW58MHx8fHwxNzg2ODE5OTExfDA&ixlib=rb-4.1.0&q=85",
+        "alt": "Soin visage éclat parapharmacie Pharma360",
+        "usage": "Main Hero Banner Slide 1"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1648203276014-20f97ba1f817?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2Mzl8MHwxfHNlYXJjaHwxfHxwaGFybWFjeSUyMHNraW5jYXJlJTIwYmFubmVyJTIwbW9kZWwlMjBmYWNlJTIwY3JlYW18ZW58MHx8fHwxNzg2ODE5OTExfDA&ixlib=rb-4.1.0&q=85",
+        "alt": "Gammes hydratantes et sérums anti-âge",
+        "usage": "Main Hero Banner Slide 2"
+      }
+    ],
+    "products": [
+      {
+        "id": "prod_1",
+        "name": "CeraVe Crème Lavante Hydratante 236ml",
+        "brand": "CeraVe",
+        "price": 2450,
+        "old_price": 2900,
+        "category": "Visage",
+        "badge": "PROMO",
+        "url": "https://images.unsplash.com/photo-1613803745799-ba6c10aace85?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzF8MHwxfHNlYXJjaHw0fHx3ZWxsbmVzcyUyMHNraW5jYXJlJTIwY29zbWV0aWNzJTIwYm90dGxlc3xlbnwwfHx8fDE3ODM0MzI4MzF8MA&ixlib=rb-4.1.0&q=85"
+      },
+      {
+        "id": "prod_2",
+        "name": "La Roche-Posay Anthelios UVMune 400 Fluide SPF50+",
+        "brand": "La Roche-Posay",
+        "price": 3100,
+        "old_price": 3600,
+        "category": "Solaires",
+        "badge": "COUP DE COEUR",
+        "url": "https://images.unsplash.com/photo-1680536977794-7954fc45afa1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njl8MHwxfHNlYXJjaHwzfHxzdW5zY3JlZW4lMjBzZXJ1bSUyMGZhY2lhbCUyMGNyZWFtJTIwYmVhdXR5JTIwcHJvZHVjdHN8ZW58MHx8fHwxNzg2ODE5OTA0fDA&ixlib=rb-4.1.0&q=85"
+      },
+      {
+        "id": "prod_3",
+        "name": "The Ordinary Sérum Vitamine C & Ácide Hyaluronique",
+        "brand": "The Ordinary",
+        "price": 2800,
+        "old_price": null,
+        "category": "K-Beauty",
+        "badge": "NOUVEAU",
+        "url": "https://images.unsplash.com/photo-1585652757141-8837d676fac8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njl8MHwxfHNlYXJjaHwxfHxzdW5zY3JlZW4lMjBzZXJ1bSUyMGZhY2lhbCUyMGNyZWFtJTIwYmVhdXR5JTIwcHJvZHVjdHN8ZW58MHx8fHwxNzg2ODE5OTA0fDA&ixlib=rb-4.1.0&q=85"
+      },
+      {
+        "id": "prod_4",
+        "name": "Avène Eau Thermale Spray Apaisant 300ml",
+        "brand": "Avène",
+        "price": 1950,
+        "old_price": 2300,
+        "category": "Santé",
+        "badge": "PROMO",
+        "url": "https://images.unsplash.com/photo-1689414748960-0498d6675f20?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njl8MHwxfHNlYXJjaHwyfHxzdW5zY3JlZW4lMjBzZXJ1bSUyMGZhY2lhbCUyMGNyZWFtJTIwYmVhdXR5JTIwcHJvZHVjdHN8ZW58MHx8fHwxNzg2ODE5OTA0fDA&ixlib=rb-4.1.0&q=85"
+      },
+      {
+        "id": "prod_5",
+        "name": "Huile Essentielle Bio Pureté & Éclat",
+        "brand": "Pharma360 Bio",
+        "price": 1600,
+        "old_price": null,
+        "category": "Corps",
+        "badge": "NATUREL",
+        "url": "https://images.unsplash.com/photo-1612817288484-6f916006741a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzF8MHwxfHNlYXJjaHwyfHx3ZWxsbmVzcyUyMHNraW5jYXJlJTIwY29zbWV0aWNzJTIwYm90dGxlc3xlbnwwfHx8fDE3ODM0MzI4MzF8MA&ixlib=rb-4.1.0&q=85"
+      },
+      {
+        "id": "prod_6",
+        "name": "Sérum Éclat Hydratation Intense C-Prime",
+        "brand": "Vichy",
+        "price": 4200,
+        "old_price": 4800,
+        "category": "Visage",
+        "badge": "PROMO",
+        "url": "https://images.unsplash.com/photo-1680537530357-f158c9d6f2ae?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njl8MHwxfHNlYXJjaHw0fHxzdW5zY3JlZW4lMjBzZXJ1bSUyMGZhY2lhbCUyMGNyZWFtJTIwYmVhdXR5JTIwcHJvZHVjdHN8ZW58MHx8fHwxNzg2ODE5OTA0fDA&ixlib=rb-4.1.0&q=85"
+      }
+    ]
+  },
+  "interactive_components_rules": {
+    "buttons": "Always explicitly define background, hover, active, and text contrast. Example: bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white shadow-md hover:shadow-lg transition-all duration-200",
+    "inputs": "Border rounded-lg px-4 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none bg-white text-slate-900 placeholder:text-slate-400",
+    "cards": "bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 hover:border-emerald-400 hover:shadow-xl transition-all duration-300 relative group overflow-hidden",
+    "modals_and_drawers": "Must use Shadcn Dialog / Sheet / Drawer components with backdrop-blur-md overlay (bg-slate-900/50)",
+    "toasts": "Use Sonner for cart additions, order confirmation, address updates, and alert notifications"
+  },
+  "testing_attributes": {
+    "rule": "Every interactive button, link, search input, filter item, cart counter, and main layout container MUST include a unique kebab-case data-testid attribute.",
+    "examples": [
+      "data-testid=\"header-logo\"",
+      "data-testid=\"header-search-input\"",
+      "data-testid=\"header-cart-button\"",
+      "data-testid=\"cart-item-count-badge\"",
+      "data-testid=\"category-nav-visage\"",
+      "data-testid=\"product-card-add-to-cart-prod_1\"",
+      "data-testid=\"checkout-payment-cod-radio\"",
+      "data-testid=\"admin-stock-table\""
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Build a fully responsive, pixel-perfect, mobile-first Algeria e-commerce parapharmacy application named Pharma360.",
+    "Strictly follow the mint green and crisp white color palette with slate-dark typography.",
+    "Ensure all prices are displayed in Dinar Algérien ('DA' or 'DZA') with proper thousands separator (ex: 2 450 DA).",
+    "Implement full functional features: Fixed Header, Top Reassurance Banner, Category Navigation Menu, Live Auto-Suggest Search, Product Cards with strikethrough prices, Cart Drawer/Page with quantity manager, Checkout flow supporting both Payment on Delivery (COD) and Algerian Cards (CIB / Edahabia simulation), Customer account section with order history, Category filters & sorting, Individual Brand Pages, Blog & advice articles, Contact form with interactive Algier location map, and a robust Admin Back-Office dashboard for inventory & order management.",
+    "Add data-testid to every interactive component for automated test compliance.",
+    "Use lucide-react icons and sonner toast notifications."
+  ]
+}
