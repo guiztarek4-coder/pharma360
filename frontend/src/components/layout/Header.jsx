@@ -135,19 +135,16 @@ export default function Header() {
 
       {/* Category nav */}
       <nav className="hidden md:block border-t border-mint-50 bg-mint-50/40" data-testid="category-nav">
-        <div className="max-w-7xl mx-auto px-6 flex items-center gap-1 h-11 overflow-x-auto no-scrollbar">
+        <div className="max-w-7xl mx-auto px-6 flex flex-wrap items-center gap-x-0.5 gap-y-1 py-2">
           {CATEGORIES.map((c) => (
             <Link key={c.id} to={`/categorie/${c.id}`} data-testid={`category-nav-${c.id}`}
-              className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 rounded-lg hover:bg-white transition-colors whitespace-nowrap">
+              className="px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 rounded-lg hover:bg-white transition-colors whitespace-nowrap">
               {c.label}
             </Link>
           ))}
-          <span className="mx-2 w-px h-4 bg-mint-200" />
-          <Link to="/marques" className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors whitespace-nowrap">Marques</Link>
-          <Link to="/catalogue?on_promo=1" className="px-3 py-1.5 text-sm font-semibold text-red-500 hover:text-red-600 transition-colors whitespace-nowrap">Promotions</Link>
-          <Link to="/catalogue?is_new=1" className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors whitespace-nowrap">Nouveautés</Link>
-          <Link to="/blog" className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors whitespace-nowrap">Blog</Link>
-          <Link to="/contact" className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors whitespace-nowrap">Contact</Link>
+          <span className="mx-2 w-px h-4 bg-mint-200 shrink-0" />
+          <Link to="/catalogue?is_new=1" data-testid="nav-nouveaux" className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors whitespace-nowrap">Nouveaux produits</Link>
+          <Link to="/catalogue?on_promo=1" data-testid="nav-promo" className="px-3 py-1.5 text-sm font-semibold text-red-500 hover:text-red-600 transition-colors whitespace-nowrap">Promo</Link>
         </div>
       </nav>
 
@@ -166,9 +163,10 @@ export default function Header() {
                   className="block px-3 py-2.5 rounded-lg hover:bg-mint-50 font-medium text-slate-700">{c.label}</Link>
               ))}
               <div className="h-px bg-mint-100 my-2" />
+              <Link to="/catalogue?is_new=1" onClick={() => setMobileMenu(false)} className="block px-3 py-2.5 rounded-lg hover:bg-mint-50 font-medium">Nouveaux produits</Link>
+              <Link to="/catalogue?on_promo=1" onClick={() => setMobileMenu(false)} className="block px-3 py-2.5 rounded-lg hover:bg-mint-50 font-semibold text-red-500">Promo</Link>
+              <div className="h-px bg-mint-100 my-2" />
               <Link to="/marques" onClick={() => setMobileMenu(false)} className="block px-3 py-2.5 rounded-lg hover:bg-mint-50 font-medium">Marques</Link>
-              <Link to="/catalogue?on_promo=1" onClick={() => setMobileMenu(false)} className="block px-3 py-2.5 rounded-lg hover:bg-mint-50 font-semibold text-red-500">Promotions</Link>
-              <Link to="/catalogue?is_new=1" onClick={() => setMobileMenu(false)} className="block px-3 py-2.5 rounded-lg hover:bg-mint-50 font-medium">Nouveautés</Link>
               <Link to="/blog" onClick={() => setMobileMenu(false)} className="block px-3 py-2.5 rounded-lg hover:bg-mint-50 font-medium">Blog</Link>
               <Link to="/contact" onClick={() => setMobileMenu(false)} className="block px-3 py-2.5 rounded-lg hover:bg-mint-50 font-medium">Contact</Link>
               <Link to="/compte" onClick={() => setMobileMenu(false)} className="block px-3 py-2.5 rounded-lg hover:bg-mint-50 font-medium">Mon compte</Link>

@@ -18,10 +18,15 @@ export const CATEGORIES = [
   { id: "visage", label: "Visage", icon: "Sparkles" },
   { id: "corps", label: "Corps", icon: "UserCheck" },
   { id: "cheveux", label: "Cheveux", icon: "Scissors" },
-  { id: "solaires", label: "Solaires", icon: "Sun" },
   { id: "hygiene", label: "Hygiène", icon: "ShieldCheck" },
-  { id: "maquillage", label: "Maquillage", icon: "Palette" },
-  { id: "kbeauty", label: "K-Beauty", icon: "Flower2" },
+  { id: "bebe-maman", label: "Bébé & Maman", icon: "Baby" },
+  { id: "solaire", label: "Solaire", icon: "Sun" },
+  { id: "homme-sport", label: "Homme & Sport", icon: "Dumbbell" },
+  { id: "complements", label: "Compléments alimentaires", icon: "Pill" },
+  { id: "minceur", label: "Minceur", icon: "Activity" },
+  { id: "nature-bio", label: "Nature & Bio", icon: "Leaf" },
+  { id: "animaux", label: "Animaux", icon: "PawPrint" },
+  { id: "materiel-medical", label: "Matériel Médical", icon: "Stethoscope" },
 ];
 
 export const WILAYAS = [
@@ -33,12 +38,17 @@ export const WILAYAS = [
 ];
 
 export const CATEGORY_IMAGES = {
-  visage: "https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=500",
-  cheveux: "https://images.unsplash.com/photo-1626784215021-2e39ccf971cd?w=500",
-  solaires: "https://images.unsplash.com/photo-1556228841-a3c527ebefe5?w=500",
-  hygiene: "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=500",
-  maquillage: "https://images.unsplash.com/photo-1586495777744-4413f21062fa?w=500",
-  corps: "https://images.unsplash.com/photo-1612817288484-6f916006741a?w=500",
   sante: "https://images.unsplash.com/photo-1607619056574-7b8d3ee536b2?w=500",
-  kbeauty: "https://images.unsplash.com/photo-1585652757141-8837d676fac8?w=500",
+  visage: "https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=500",
+  corps: "https://images.unsplash.com/photo-1612817288484-6f916006741a?w=500",
+  cheveux: "https://images.unsplash.com/photo-1522337660859-02fbefca4702?w=500",
+  hygiene: "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=500",
+  "bebe-maman": "https://images.unsplash.com/photo-1778276551433-75420636007d?w=500",
+  solaire: "https://images.unsplash.com/photo-1556228841-a3c527ebefe5?w=500",
+  "homme-sport": "https://images.unsplash.com/photo-1669322779651-5ca89652492e?w=500",
+  complements: "https://images.unsplash.com/photo-1664956618021-73c47736845e?w=500",
+  minceur: "https://images.unsplash.com/photo-1523901839036-a3030662f220?w=500",
+  "nature-bio": "https://images.unsplash.com/photo-1760108249194-f9cafd970762?w=500",
+  animaux: "https://images.unsplash.com/photo-1571873735645-1ae72b963024?w=500",
+  "materiel-medical": "https://images.unsplash.com/photo-1700832082200-af7deeb63d9b?w=500",
 };

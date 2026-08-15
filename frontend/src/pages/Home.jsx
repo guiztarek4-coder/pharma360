@@ -98,7 +98,7 @@ export default function Home() {
             {CATEGORIES.map((c) => (
               <Link key={c.id} to={`/categorie/${c.id}`} data-testid={`home-category-${c.id}`}
                 className="group relative aspect-[4/5] sm:aspect-square rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all">
-                <img src={CATEGORY_IMAGES[c.id]} alt={c.label} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                <img src={mediaUrl(CATEGORY_IMAGES[c.id])} alt={c.label} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-900/70 via-slate-900/10 to-transparent" />
                 <span className="absolute bottom-3 left-3 font-display font-bold text-white text-lg">{c.label}</span>
               </Link>
