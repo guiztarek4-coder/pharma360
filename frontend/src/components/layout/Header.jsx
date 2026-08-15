@@ -99,8 +99,9 @@ export default function Header() {
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-mint-100 shadow-sm" data-testid="site-header">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center gap-4 h-16">
-          <button className="lg:hidden text-slate-dark" onClick={() => setMobileMenu(true)} data-testid="mobile-menu-open">
+          <button className="md:hidden flex items-center gap-1.5 text-slate-dark font-semibold text-sm" onClick={() => setMobileMenu(true)} data-testid="mobile-menu-open">
             <Menu className="w-6 h-6" />
+            <span>Menu</span>
           </button>
           <Logo settings={settings} />
           <div className="hidden md:block flex-1">
@@ -132,27 +133,27 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Category nav desktop */}
-      <nav className="hidden lg:block border-t border-mint-50 bg-mint-50/40">
-        <div className="max-w-7xl mx-auto px-6 flex items-center gap-1 h-11">
+      {/* Category nav */}
+      <nav className="hidden md:block border-t border-mint-50 bg-mint-50/40" data-testid="category-nav">
+        <div className="max-w-7xl mx-auto px-6 flex items-center gap-1 h-11 overflow-x-auto no-scrollbar">
           {CATEGORIES.map((c) => (
             <Link key={c.id} to={`/categorie/${c.id}`} data-testid={`category-nav-${c.id}`}
-              className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 rounded-lg hover:bg-white transition-colors">
+              className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 rounded-lg hover:bg-white transition-colors whitespace-nowrap">
               {c.label}
             </Link>
           ))}
           <span className="mx-2 w-px h-4 bg-mint-200" />
-          <Link to="/marques" className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors">Marques</Link>
-          <Link to="/catalogue?on_promo=1" className="px-3 py-1.5 text-sm font-semibold text-red-500 hover:text-red-600 transition-colors">Promotions</Link>
-          <Link to="/catalogue?is_new=1" className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors">Nouveautés</Link>
-          <Link to="/blog" className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors">Blog</Link>
-          <Link to="/contact" className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors">Contact</Link>
+          <Link to="/marques" className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors whitespace-nowrap">Marques</Link>
+          <Link to="/catalogue?on_promo=1" className="px-3 py-1.5 text-sm font-semibold text-red-500 hover:text-red-600 transition-colors whitespace-nowrap">Promotions</Link>
+          <Link to="/catalogue?is_new=1" className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors whitespace-nowrap">Nouveautés</Link>
+          <Link to="/blog" className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors whitespace-nowrap">Blog</Link>
+          <Link to="/contact" className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors whitespace-nowrap">Contact</Link>
         </div>
       </nav>
 
       {/* Mobile drawer */}
       {mobileMenu && (
-        <div className="fixed inset-0 z-50 lg:hidden" data-testid="mobile-menu">
+        <div className="fixed inset-0 z-50 md:hidden" data-testid="mobile-menu">
           <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setMobileMenu(false)} />
           <div className="absolute left-0 top-0 h-full w-80 max-w-[85%] bg-white p-5 overflow-auto animate-fade-up">
             <div className="flex items-center justify-between mb-6">
