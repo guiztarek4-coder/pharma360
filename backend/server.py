@@ -594,11 +594,12 @@ async def list_messages(admin: dict = Depends(get_admin_user)):
 # ----------------------------------------------------------------------------
 @api.get("/admin/stats")
 async def admin_stats(admin: dict = Depends(get_admin_user)):
-    orders = await db.orders.find().to_list(2000)
-    revenue = sum(o.get("total", 0) for o in orders)
+    agg = await db.orders.aggregate([{"$group": {"_id": None, "total": {"$sum": "$total"}, "count": {"$sum": 1}}}]).to_list(1)
+    revenue = agg[0]["total"] if agg else 0
+    orders_count = agg[0]["count"] if agg else 0
     return {
         "products": await db.products.count_documents({}),
-        "orders": len(orders),
+        "orders": orders_count,
         "brands": await db.brands.count_documents({}),
         "revenue": revenue,
         "pending_orders": await db.orders.count_documents({"status": "En attente"}),
