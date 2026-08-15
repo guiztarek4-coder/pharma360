@@ -751,6 +751,92 @@ async def seed():
     logger.info("Seed data inserted")
 
 
+# ----------------------------------------------------------------------------
+# Site settings (editable by admin)
+# ----------------------------------------------------------------------------
+DEFAULT_SETTINGS = {
+    "brand_name": "Pharma360",
+    "tagline": "Votre Parapharmacie en Ligne en Algérie",
+    "logo": None,
+    "phone": "0500 00 00 00",
+    "phone_link": "+213500000000",
+    "email": "contact@pharma360-dz.com",
+    "address": "Adresse à définir, Alger, Algérie",
+    "horaires": "7j/7 — 08h00 à 22h00",
+    "facebook": "#",
+    "instagram": "#",
+    "tiktok": "#",
+    "delivery_zone": "Alger uniquement",
+    "delivery_fee": 500,
+    "payment_cod_enabled": True,
+    "payment_card_enabled": True,
+}
+
+
+async def ensure_settings():
+    existing = await db.settings.find_one({"_id": "site"})
+    if not existing:
+        await db.settings.insert_one({"_id": "site", **DEFAULT_SETTINGS})
+    else:
+        merged = {k: existing.get(k, v) for k, v in DEFAULT_SETTINGS.items()}
+        await db.settings.update_one({"_id": "site"}, {"$set": merged})
+
+
+@api.get("/settings")
+async def get_settings():
+    doc = await db.settings.find_one({"_id": "site"})
+    if not doc:
+        return DEFAULT_SETTINGS
+    doc.pop("_id", None)
+    return doc
+
+
+@api.put("/settings")
+async def update_settings(payload: dict, admin: dict = Depends(get_admin_user)):
+    allowed = {k: payload[k] for k in DEFAULT_SETTINGS if k in payload}
+    await db.settings.update_one({"_id": "site"}, {"$set": allowed}, upsert=True)
+    doc = await db.settings.find_one({"_id": "site"})
+    doc.pop("_id", None)
+    return doc
+
+
+# ----------------------------------------------------------------------------
+# Product reviews
+# ----------------------------------------------------------------------------
+class ReviewInput(BaseModel):
+    name: str
+    rating: int = Field(ge=1, le=5)
+    comment: str = ""
+
+
+@api.get("/products/{product_id}/reviews")
+async def get_reviews(product_id: str):
+    cursor = db.reviews.find({"product_id": product_id}).sort("created_at", -1)
+    reviews = [clean(d) for d in await cursor.to_list(200)]
+    avg = round(sum(r["rating"] for r in reviews) / len(reviews), 1) if reviews else 0
+    return {"reviews": reviews, "average": avg, "count": len(reviews)}
+
+
+@api.post("/products/{product_id}/reviews")
+async def add_review(product_id: str, data: ReviewInput, request: Request):
+    user = None
+    try:
+        user = await get_current_user(request)
+    except HTTPException:
+        pass
+    doc = {
+        "product_id": product_id,
+        "name": data.name.strip() or "Client",
+        "rating": data.rating,
+        "comment": data.comment.strip(),
+        "user_id": str(user["_id"]) if user else None,
+        "created_at": now_utc().isoformat(),
+    }
+    res = await db.reviews.insert_one(doc)
+    doc["_id"] = res.inserted_id
+    return clean(doc)
+
+
 @api.get("/")
 async def root():
     return {"message": "Pharma360 API"}
@@ -774,6 +860,7 @@ async def startup():
     except Exception as e:
         logger.error(f"Storage init failed: {e}")
     await seed()
+    await ensure_settings()
 
 
 @app.on_event("shutdown")

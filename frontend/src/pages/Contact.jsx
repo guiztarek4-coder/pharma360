@@ -2,9 +2,10 @@ import { useState } from "react";
 import { MapPin, Phone, Mail, Clock, Send } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
-import { SITE } from "@/lib/site";
+import { useSettings } from "@/context/SettingsContext";
 
 export default function Contact() {
+  const { settings } = useSettings();
   const [f, setF] = useState({ name: "", email: "", subject: "", message: "" });
   const [loading, setLoading] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -28,7 +29,7 @@ export default function Contact() {
 
       <div className="grid lg:grid-cols-2 gap-8">
         <div className="space-y-4">
-          {[[MapPin, "Adresse", SITE.address], [Phone, "Téléphone", SITE.phone], [Mail, "Email", SITE.email], [Clock, "Horaires", SITE.horaires]].map(([Icon, t, v], i) => (
+          {[[MapPin, "Adresse", settings.address], [Phone, "Téléphone", settings.phone], [Mail, "Email", settings.email], [Clock, "Horaires", settings.horaires]].map(([Icon, t, v], i) => (
             <div key={i} className="flex items-start gap-4 bg-white rounded-2xl border border-slate-200/80 p-5">
               <span className="w-11 h-11 rounded-xl bg-mint-50 grid place-items-center shrink-0"><Icon className="w-5 h-5 text-mint-600" /></span>
               <div><div className="font-display font-bold text-sm">{t}</div><div className="text-slate-600 text-sm">{v}</div></div>

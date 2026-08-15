@@ -1,9 +1,80 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ShoppingCart, Plus, Minus, ShieldCheck, Truck, CreditCard, ChevronRight, Check } from "lucide-react";
-import api, { formatDA, mediaUrl } from "@/lib/api";
+import { ShoppingCart, Plus, Minus, ShieldCheck, Truck, CreditCard, ChevronRight, Check, Star } from "lucide-react";
+import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
 import { useCart } from "@/context/CartContext";
+import { toast } from "sonner";
+
+function Stars({ value, size = "w-4 h-4", onSelect }) {
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button key={n} type="button" disabled={!onSelect} onClick={() => onSelect && onSelect(n)}
+          className={onSelect ? "cursor-pointer" : "cursor-default"}>
+          <Star className={`${size} ${n <= Math.round(value) ? "fill-amber-400 text-amber-400" : "text-slate-300"}`} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Reviews({ productId }) {
+  const [data, setData] = useState({ reviews: [], average: 0, count: 0 });
+  const [form, setForm] = useState({ name: "", rating: 5, comment: "" });
+  const [busy, setBusy] = useState(false);
+
+  const load = () => api.get(`/products/${productId}/reviews`).then((r) => setData(r.data));
+  useEffect(() => { load(); }, [productId]);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.name.trim()) { toast.error("Votre nom est requis"); return; }
+    setBusy(true);
+    try {
+      await api.post(`/products/${productId}/reviews`, form);
+      toast.success("Merci pour votre avis !");
+      setForm({ name: "", rating: 5, comment: "" });
+      load();
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <section className="mt-16" data-testid="reviews-section">
+      <div className="flex items-center gap-3 mb-6">
+        <h2 className="font-display font-extrabold text-2xl text-slate-dark">Avis clients</h2>
+        {data.count > 0 && (
+          <div className="flex items-center gap-2"><Stars value={data.average} /><span className="text-sm text-slate-500">{data.average}/5 · {data.count} avis</span></div>
+        )}
+      </div>
+      <div className="grid lg:grid-cols-2 gap-8">
+        <div className="space-y-4">
+          {data.reviews.length === 0 ? <p className="text-slate-400 text-sm">Aucun avis pour le moment. Soyez le premier !</p> :
+            data.reviews.map((r) => (
+              <div key={r.id} className="bg-white rounded-2xl border border-slate-200/80 p-4" data-testid={`review-${r.id}`}>
+                <div className="flex items-center justify-between">
+                  <div className="font-semibold text-sm">{r.name}</div>
+                  <Stars value={r.rating} size="w-3.5 h-3.5" />
+                </div>
+                {r.comment && <p className="text-sm text-slate-600 mt-2">{r.comment}</p>}
+                <div className="text-xs text-slate-400 mt-2">{new Date(r.created_at).toLocaleDateString("fr-FR")}</div>
+              </div>
+            ))}
+        </div>
+        <form onSubmit={submit} className="bg-white rounded-2xl border border-slate-200/80 p-5 h-fit space-y-3">
+          <h3 className="font-display font-bold">Laisser un avis</h3>
+          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Votre nom" data-testid="review-name"
+            className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
+          <div className="flex items-center gap-2"><span className="text-sm text-slate-500">Note :</span><Stars value={form.rating} onSelect={(n) => setForm({ ...form, rating: n })} /></div>
+          <textarea value={form.comment} onChange={(e) => setForm({ ...form, comment: e.target.value })} rows={3} placeholder="Votre commentaire (optionnel)" data-testid="review-comment"
+            className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
+          <button disabled={busy} data-testid="review-submit" className="px-6 py-2.5 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold text-sm disabled:opacity-50">{busy ? "…" : "Publier mon avis"}</button>
+        </form>
+      </div>
+    </section>
+  );
+}
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -86,7 +157,7 @@ export default function ProductDetail() {
           </div>
 
           <div className="grid grid-cols-3 gap-3 mt-8">
-            {[[Truck, "Livraison 58 wilayas"], [CreditCard, "Paiement livraison"], [ShieldCheck, "100% Original"]].map(([Icon, t], i) => (
+            {[[Truck, "Livraison à Alger"], [CreditCard, "Paiement livraison"], [ShieldCheck, "100% Original"]].map(([Icon, t], i) => (
               <div key={i} className="text-center p-3 rounded-2xl bg-mint-50/60 border border-mint-100">
                 <Icon className="w-5 h-5 text-mint-600 mx-auto mb-1.5" />
                 <div className="text-xs text-slate-600 font-medium">{t}</div>
@@ -95,6 +166,8 @@ export default function ProductDetail() {
           </div>
         </div>
       </div>
+
+      <Reviews productId={id} />
 
       {related.length > 0 && (
         <section className="mt-16">

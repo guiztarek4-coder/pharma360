@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import "@/index.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
+import { SettingsProvider } from "@/context/SettingsContext";
 import TopBar from "@/components/layout/TopBar";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -42,7 +43,8 @@ function App() {
       <BrowserRouter>
         <AuthProvider>
           <CartProvider>
-            <Shell>
+            <SettingsProvider>
+              <Shell>
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/catalogue" element={<Catalog />} />
@@ -62,6 +64,7 @@ function App() {
               </Routes>
             </Shell>
             <Toaster position="top-center" richColors />
+            </SettingsProvider>
           </CartProvider>
         </AuthProvider>
       </BrowserRouter>

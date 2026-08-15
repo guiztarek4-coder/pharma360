@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { useParams, useLocation, Link } from "react-router-dom";
 import { CheckCircle2, Package, Phone } from "lucide-react";
 import api, { formatDA } from "@/lib/api";
-import { SITE } from "@/lib/site";
+import { useSettings } from "@/context/SettingsContext";
 
 export default function OrderSuccess() {
   const { id } = useParams();
   const location = useLocation();
+  const { settings } = useSettings();
   const [order, setOrder] = useState(location.state?.order || null);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
@@ -45,7 +46,7 @@ export default function OrderSuccess() {
         <Link to="/catalogue" className="px-6 py-3 rounded-full bg-mint-600 text-white font-semibold hover:bg-mint-700">Continuer mes achats</Link>
         <Link to="/compte" className="px-6 py-3 rounded-full border border-mint-200 font-semibold flex items-center gap-2"><Package className="w-4 h-4" /> Mes commandes</Link>
       </div>
-      <a href={`tel:${SITE.phoneLink}`} className="inline-flex items-center gap-2 mt-6 text-sm text-slate-500"><Phone className="w-4 h-4 text-mint-600" /> Une question ? {SITE.phone}</a>
+      <a href={`tel:${settings.phone_link}`} className="inline-flex items-center gap-2 mt-6 text-sm text-slate-500"><Phone className="w-4 h-4 text-mint-600" /> Une question ? {settings.phone}</a>
     </div>
   );
 }

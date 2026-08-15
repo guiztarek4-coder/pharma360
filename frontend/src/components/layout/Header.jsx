@@ -3,19 +3,26 @@ import { Link, useNavigate } from "react-router-dom";
 import { Search, User, ShoppingCart, Phone, Menu, X, Leaf } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
+import { useSettings } from "@/context/SettingsContext";
 import api, { formatDA, mediaUrl } from "@/lib/api";
 import { SITE, CATEGORIES } from "@/lib/site";
 
-const Logo = () => (
+const Logo = ({ settings }) => (
   <Link to="/" data-testid="header-logo" className="flex items-center gap-2 shrink-0">
-    <div className="relative w-9 h-9 rounded-xl bg-mint-600 grid place-items-center shadow-md shadow-mint-600/30">
-      <Leaf className="w-5 h-5 text-white" />
-      <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-mint-200 border-2 border-white grid place-items-center text-[8px] font-bold text-mint-800">+</span>
-    </div>
-    <div className="leading-none">
-      <div className="font-display font-extrabold text-lg sm:text-xl text-slate-dark">Pharma<span className="text-mint-600">360</span></div>
-      <div className="text-[9px] font-mono-label text-mint-700 hidden sm:block">Parapharmacie · Algérie</div>
-    </div>
+    {settings?.logo ? (
+      <img src={mediaUrl(settings.logo)} alt={settings.brand_name} className="h-10 w-auto object-contain" />
+    ) : (
+      <>
+        <div className="relative w-9 h-9 rounded-xl bg-mint-600 grid place-items-center shadow-md shadow-mint-600/30">
+          <Leaf className="w-5 h-5 text-white" />
+          <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-mint-200 border-2 border-white grid place-items-center text-[8px] font-bold text-mint-800">+</span>
+        </div>
+        <div className="leading-none">
+          <div className="font-display font-extrabold text-lg sm:text-xl text-slate-dark">Pharma<span className="text-mint-600">360</span></div>
+          <div className="text-[9px] font-mono-label text-mint-700 hidden sm:block">Parapharmacie · Algérie</div>
+        </div>
+      </>
+    )}
   </Link>
 );
 
@@ -85,6 +92,7 @@ function SearchBar({ mobile }) {
 export default function Header() {
   const { count, total, setOpen } = useCart();
   const { user } = useAuth();
+  const { settings } = useSettings();
   const [mobileMenu, setMobileMenu] = useState(false);
 
   return (
@@ -94,15 +102,15 @@ export default function Header() {
           <button className="lg:hidden text-slate-dark" onClick={() => setMobileMenu(true)} data-testid="mobile-menu-open">
             <Menu className="w-6 h-6" />
           </button>
-          <Logo />
+          <Logo settings={settings} />
           <div className="hidden md:block flex-1">
             <SearchBar />
           </div>
           <div className="flex items-center gap-1 sm:gap-3 ml-auto">
-            <a href={`tel:${SITE.phoneLink}`} data-testid="header-phone"
+            <a href={`tel:${settings.phone_link}`} data-testid="header-phone"
               className="hidden lg:flex items-center gap-2 text-sm font-semibold text-slate-dark hover:text-mint-600 transition-colors">
               <span className="w-9 h-9 rounded-full bg-mint-50 grid place-items-center"><Phone className="w-4 h-4 text-mint-600" /></span>
-              {SITE.phone}
+              {settings.phone}
             </a>
             <Link to={user && user.role === "admin" ? "/admin" : "/compte"} data-testid="header-account"
               className="flex items-center gap-2 px-2 sm:px-3 py-2 rounded-full hover:bg-mint-50 transition-colors">
@@ -148,7 +156,7 @@ export default function Header() {
           <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setMobileMenu(false)} />
           <div className="absolute left-0 top-0 h-full w-80 max-w-[85%] bg-white p-5 overflow-auto animate-fade-up">
             <div className="flex items-center justify-between mb-6">
-              <Logo />
+              <Logo settings={settings} />
               <button onClick={() => setMobileMenu(false)} data-testid="mobile-menu-close"><X className="w-6 h-6" /></button>
             </div>
             <div className="space-y-1">

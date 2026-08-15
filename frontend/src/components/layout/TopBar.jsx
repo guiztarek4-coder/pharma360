@@ -1,13 +1,14 @@
 import { Truck, ShieldCheck, Zap, Phone } from "lucide-react";
-
-const items = [
-  { icon: Truck, text: "Livraison rapide dans les 58 Wilayas d'Algérie" },
-  { icon: ShieldCheck, text: "Produits 100% Originaux & Authentiques" },
-  { icon: Zap, text: "Expédition Express sous 24h–48h" },
-  { icon: Phone, text: "Conseils & Service Client : 0550 36 03 60" },
-];
+import { useSettings } from "@/context/SettingsContext";
 
 export default function TopBar() {
+  const { settings } = useSettings();
+  const items = [
+    { icon: Truck, text: "Livraison rapide à Alger" },
+    { icon: ShieldCheck, text: "Produits 100% Originaux & Authentiques" },
+    { icon: Zap, text: "Expédition Express sous 24h–48h" },
+    { icon: Phone, text: `Conseils & Service Client : ${settings.phone}` },
+  ];
   const row = [...items, ...items];
   return (
     <div className="bg-mint-900 text-mint-100 text-xs sm:text-[13px] overflow-hidden" data-testid="top-reassurance-bar">

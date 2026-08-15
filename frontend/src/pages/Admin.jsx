@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, Package, ShoppingBag, Tag, FileText, LogOut, Plus, Pencil, Trash2, X, Upload, TrendingUp, Users, Leaf } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Tag, FileText, LogOut, Plus, Pencil, Trash2, X, Upload, TrendingUp, Users, Leaf, Settings } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useSettings } from "@/context/SettingsContext";
 import { CATEGORIES } from "@/lib/site";
 
 function AdminLogin() {
@@ -135,6 +136,7 @@ function Dashboard() {
     { id: "orders", label: "Commandes", icon: ShoppingBag },
     { id: "brands", label: "Marques", icon: Tag },
     { id: "blog", label: "Blog", icon: FileText },
+    { id: "settings", label: "Paramètres", icon: Settings },
   ];
 
   return (
@@ -238,6 +240,7 @@ function Dashboard() {
             </div>
           </div>
         )}
+        {tab === "settings" && <SettingsPanel />}
       </div>
 
       {editing && <ProductForm product={editing.id ? editing : null} brands={brands} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); loadAll(); }} />}
@@ -293,6 +296,68 @@ function Modal({ title, onClose, children }) {
         <div className="flex items-center justify-between mb-1"><h3 className="font-display font-bold text-lg">{title}</h3><button onClick={onClose}><X className="w-5 h-5" /></button></div>
         {children}
       </div>
+    </div>
+  );
+}
+
+function SettingsPanel() {
+  const { refresh } = useSettings();
+  const [f, setF] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api.get("/settings").then((r) => setF(r.data)); }, []);
+  if (!f) return <p className="text-slate-400">Chargement…</p>;
+  const set = (k, v) => setF({ ...f, [k]: v });
+  const save = async () => {
+    setBusy(true);
+    try { await api.put("/settings", f); await refresh(); toast.success("Paramètres enregistrés"); }
+    catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/80 p-6 max-w-3xl space-y-5" data-testid="admin-settings">
+      <div>
+        <h3 className="font-display font-bold text-lg mb-1">Identité & Logo</h3>
+        <p className="text-sm text-slate-500 mb-3">Personnalisez le logo, le nom et les informations affichées sur tout le site.</p>
+        <L label="Logo (image)"><ImageUpload value={f.logo} onChange={(url) => set("logo", url)} /></L>
+        <div className="grid sm:grid-cols-2 gap-3 mt-3">
+          <L label="Nom de la boutique"><input value={f.brand_name} onChange={(e) => set("brand_name", e.target.value)} data-testid="set-brand" className={inp} /></L>
+          <L label="Slogan"><input value={f.tagline} onChange={(e) => set("tagline", e.target.value)} className={inp} /></L>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="font-display font-bold text-lg mb-3">Coordonnées</h3>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <L label="Téléphone (affiché)"><input value={f.phone} onChange={(e) => set("phone", e.target.value)} data-testid="set-phone" className={inp} /></L>
+          <L label="Téléphone (lien tel:)"><input value={f.phone_link} onChange={(e) => set("phone_link", e.target.value)} placeholder="+213..." className={inp} /></L>
+          <L label="Email"><input value={f.email} onChange={(e) => set("email", e.target.value)} className={inp} /></L>
+          <L label="Horaires"><input value={f.horaires} onChange={(e) => set("horaires", e.target.value)} className={inp} /></L>
+          <div className="sm:col-span-2"><L label="Adresse"><input value={f.address} onChange={(e) => set("address", e.target.value)} data-testid="set-address" className={inp} /></L></div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="font-display font-bold text-lg mb-3">Réseaux sociaux</h3>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <L label="Facebook (URL)"><input value={f.facebook} onChange={(e) => set("facebook", e.target.value)} className={inp} /></L>
+          <L label="Instagram (URL)"><input value={f.instagram} onChange={(e) => set("instagram", e.target.value)} className={inp} /></L>
+          <L label="TikTok (URL)"><input value={f.tiktok} onChange={(e) => set("tiktok", e.target.value)} className={inp} /></L>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="font-display font-bold text-lg mb-3">Livraison & Paiement</h3>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <L label="Zone de livraison"><input value={f.delivery_zone} onChange={(e) => set("delivery_zone", e.target.value)} className={inp} /></L>
+          <L label="Frais de livraison (DA)"><input type="number" value={f.delivery_fee} onChange={(e) => set("delivery_fee", Number(e.target.value))} data-testid="set-delivery" className={inp} /></L>
+        </div>
+        <div className="flex flex-wrap gap-5 mt-3">
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.payment_cod_enabled} onChange={(e) => set("payment_cod_enabled", e.target.checked)} className="accent-mint-600 w-4 h-4" data-testid="set-cod" /> Paiement à la livraison</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.payment_card_enabled} onChange={(e) => set("payment_card_enabled", e.target.checked)} className="accent-mint-600 w-4 h-4" data-testid="set-card" /> Paiement par carte (démo)</label>
+        </div>
+      </div>
+
+      <button onClick={save} disabled={busy} data-testid="settings-save" className="px-6 py-3 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold disabled:opacity-50">{busy ? "…" : "Enregistrer les paramètres"}</button>
     </div>
   );
 }

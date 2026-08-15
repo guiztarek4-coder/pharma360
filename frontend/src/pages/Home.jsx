@@ -58,7 +58,7 @@ export default function Home() {
               <Link to="/catalogue" className="px-6 py-3.5 rounded-full bg-white border border-mint-200 text-slate-dark font-semibold hover:border-mint-400 transition-colors">Tout le catalogue</Link>
             </div>
             <div className="flex flex-wrap gap-4 mt-8">
-              {[[Truck, "Livraison 58 Wilayas"], [CreditCard, "Paiement à la livraison"], [ShieldCheck, "100% Certifié"]].map(([Icon, t], i) => (
+              {[[Truck, "Livraison à Alger"], [CreditCard, "Paiement à la livraison"], [ShieldCheck, "100% Certifié"]].map(([Icon, t], i) => (
                 <div key={i} className="flex items-center gap-2 text-sm text-slate-600"><Icon className="w-4 h-4 text-mint-600" />{t}</div>
               ))}
             </div>

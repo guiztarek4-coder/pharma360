@@ -5,15 +5,15 @@ import { toast } from "sonner";
 import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
-import { WILAYAS } from "@/lib/site";
-
-const DELIVERY = 500;
+import { useSettings } from "@/context/SettingsContext";
 
 export default function Checkout() {
   const { items, total, clear } = useCart();
   const { user } = useAuth();
+  const { settings } = useSettings();
   const navigate = useNavigate();
-  const [payment, setPayment] = useState("cod");
+  const DELIVERY = settings.delivery_fee ?? 500;
+  const [payment, setPayment] = useState(settings.payment_cod_enabled ? "cod" : "card");
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     full_name: user ? `${user.first_name} ${user.last_name}` : "",
@@ -67,10 +67,9 @@ export default function Checkout() {
               <Field label="Téléphone *" value={form.phone} onChange={set("phone")} testid="checkout-phone" placeholder="05XX XX XX XX" />
               <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1.5">Wilaya *</label>
-                <select value={form.wilaya} onChange={set("wilaya")} data-testid="checkout-wilaya"
-                  className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500 bg-white">
-                  {WILAYAS.map((w) => <option key={w} value={w}>{w}</option>)}
-                </select>
+                <input value="Alger" disabled data-testid="checkout-wilaya"
+                  className="w-full px-4 py-2.5 rounded-xl border border-mint-200 bg-mint-50 text-slate-600" />
+                <p className="text-xs text-mint-700 mt-1">🚚 Livraison disponible à {settings.delivery_zone}.</p>
               </div>
               <Field label="Commune" value={form.commune} onChange={set("commune")} testid="checkout-commune" />
               <div className="sm:col-span-2">
@@ -87,16 +86,20 @@ export default function Checkout() {
           <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6">
             <h2 className="font-display font-bold text-lg mb-4">Mode de paiement</h2>
             <div className="space-y-3">
+              {settings.payment_cod_enabled && (
               <label className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${payment === "cod" ? "border-mint-500 bg-mint-50" : "border-slate-200"}`} data-testid="checkout-payment-cod-radio">
                 <input type="radio" name="pay" checked={payment === "cod"} onChange={() => setPayment("cod")} className="accent-mint-600 w-4 h-4" />
                 <Truck className="w-5 h-5 text-mint-600" />
                 <div><div className="font-semibold text-sm">Paiement à la livraison</div><div className="text-xs text-slate-500">Payez en espèces à la réception</div></div>
               </label>
+              )}
+              {settings.payment_card_enabled && (
               <label className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${payment === "card" ? "border-mint-500 bg-mint-50" : "border-slate-200"}`} data-testid="checkout-payment-card-radio">
                 <input type="radio" name="pay" checked={payment === "card"} onChange={() => setPayment("card")} className="accent-mint-600 w-4 h-4" />
                 <CreditCard className="w-5 h-5 text-mint-600" />
                 <div><div className="font-semibold text-sm">Carte CIB / Edahabia <span className="text-[10px] uppercase bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded ml-1">Démo</span></div><div className="text-xs text-slate-500">Paiement en ligne simulé (démonstration)</div></div>
               </label>
+              )}
             </div>
           </div>
         </div>

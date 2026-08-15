@@ -6,16 +6,18 @@ export const useCart = () => useContext(CartContext);
 
 const STORAGE_KEY = "pharma360_cart";
 
-export const CartProvider = ({ children }) => {
-  const [items, setItems] = useState([]);
-  const [open, setOpen] = useState(false);
+const readCart = () => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+};
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) setItems(JSON.parse(saved));
-    } catch {}
-  }, []);
+export const CartProvider = ({ children }) => {
+  const [items, setItems] = useState(readCart);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
