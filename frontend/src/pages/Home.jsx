@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { ArrowRight, ShieldCheck, Truck, CreditCard, Sparkles } from "lucide-react";
 import api, { mediaUrl } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
-import { CATEGORIES, CATEGORY_IMAGES } from "@/lib/site";
+import { useSettings } from "@/context/SettingsContext";
+import { useCategories } from "@/context/CategoriesContext";
 
 function SectionHeader({ title, subtitle, to }) {
   return (
@@ -26,6 +27,8 @@ function Grid({ products }) {
 }
 
 export default function Home() {
+  const { settings } = useSettings();
+  const { categories } = useCategories();
   const [promos, setPromos] = useState([]);
   const [news, setNews] = useState([]);
   const [featured, setFeatured] = useState([]);
@@ -50,22 +53,22 @@ export default function Home() {
               <Sparkles className="w-3.5 h-3.5" /> Offres du moment · Parapharmacie Algérie
             </span>
             <h1 className="font-display font-extrabold text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-slate-dark leading-[1.05]">
-              Prenez soin de votre <span className="text-mint-600">peau & santé</span> au meilleur prix
+              {settings.hero_title || "Prenez soin de votre peau & santé au meilleur prix"}
             </h1>
-            <p className="text-slate-600 text-base sm:text-lg mt-5 max-w-lg">Cosmétiques et soins 100% originaux, livrés partout en Algérie. Payez à la livraison, en toute confiance.</p>
+            <p className="text-slate-600 text-base sm:text-lg mt-5 max-w-lg">{settings.hero_subtitle}</p>
             <div className="flex flex-wrap gap-3 mt-7">
               <Link to="/catalogue?on_promo=1" data-testid="hero-cta-promos" className="px-6 py-3.5 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold shadow-lg shadow-mint-600/30 transition-colors">Découvrir les promos</Link>
               <Link to="/catalogue" className="px-6 py-3.5 rounded-full bg-white border border-mint-200 text-slate-dark font-semibold hover:border-mint-400 transition-colors">Tout le catalogue</Link>
             </div>
             <div className="flex flex-wrap gap-4 mt-8">
-              {[[Truck, "Livraison à Alger"], [CreditCard, "Paiement à la livraison"], [ShieldCheck, "100% Certifié"]].map(([Icon, t], i) => (
+              {[[Truck, "Livraison partout en Algérie"], [CreditCard, "Paiement à la livraison"], [ShieldCheck, "100% Certifié"]].map(([Icon, t], i) => (
                 <div key={i} className="flex items-center gap-2 text-sm text-slate-600"><Icon className="w-4 h-4 text-mint-600" />{t}</div>
               ))}
             </div>
           </div>
           <div className="relative">
             <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-mint-900/20 aspect-[4/3]">
-              <img src="https://images.unsplash.com/photo-1728727267814-792db55ce678?w=900" alt="Soin visage Pharma360" className="w-full h-full object-cover" />
+              <img src={settings.hero_image ? mediaUrl(settings.hero_image) : "https://images.unsplash.com/photo-1728727267814-792db55ce678?w=900"} alt="Soin visage Pharma360" className="w-full h-full object-cover" />
             </div>
             <div className="absolute -bottom-4 -left-4 bg-white rounded-2xl shadow-xl p-4 hidden sm:block">
               <div className="text-xs text-slate-400 font-mono-label">Jusqu'à</div>
@@ -95,12 +98,12 @@ export default function Home() {
         <section data-testid="section-categories">
           <SectionHeader title="Des catégories pour chaque besoin" subtitle="Trouvez le soin adapté à vos besoins spécifiques" />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-5">
-            {CATEGORIES.map((c) => (
+            {categories.map((c) => (
               <Link key={c.id} to={`/categorie/${c.id}`} data-testid={`home-category-${c.id}`}
                 className="group relative aspect-[4/5] sm:aspect-square rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all">
-                <img src={mediaUrl(CATEGORY_IMAGES[c.id])} alt={c.label} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                <img src={mediaUrl(c.image)} alt={c.label} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-900/70 via-slate-900/10 to-transparent" />
-                <span className="absolute bottom-3 left-3 font-display font-bold text-white text-lg">{c.label}</span>
+                <span className="absolute bottom-3 left-3 right-3 font-display font-bold text-white text-base sm:text-lg leading-tight">{c.label}</span>
               </Link>
             ))}
           </div>

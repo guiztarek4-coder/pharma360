@@ -30,8 +30,21 @@ Site e-commerce de parapharmacie "Pharma360" basé en Algérie, inspiré de phar
 - Seed: 12 produits, 10 marques, 3 articles.
 - Tests: backend 40/40, flux frontend critiques 100%.
 
+## Implemented (2026-08-16 — iteration 4)
+- Fix bug menu z-index (drawer mobile via portail z-[9999]). Tests 21/21 backend, 100% frontend.
+- Livraison toutes wilayas + frais par wilaya (admin). 3 modes: retrait pharmacie (gratuit), domicile, point relais.
+- Checkout: modes de livraison, code promo (BIENVENUE10 seedé), total détaillé (sous-total+livraison-remise).
+- Notifications commandes: notification in-app admin (badge) + email auto (nécessite RESEND_API_KEY, sinon ignoré).
+- Sous-catégories dynamiques + catégories dynamiques (DB), CRUD admin complet.
+- Admin dashboard restructuré: Commandes, Produits, Clients (+historique), Marques, Catégories, Codes promo, Blog, Bannières, Notifications, Paramètres, Compte.
+- Bannières éditables (hero image/titre/sous-titre + messages bandeau).
+- Recherche multi-termes (nom/marque/catégorie).
+- Admin peut changer nom/email/mot de passe depuis l'onglet Compte.
+- Responsive mobile amélioré.
+
 ## Known Limitations / MOCKED
 - Paiement en ligne par carte (CIB/Edahabia) = **SIMULÉ (démo)**. Stripe ne supporte pas l'Algérie (DZ), donc pas de passerelle réelle. La commande carte est marquée "payée" sans transaction réelle.
+- Email de notification de commande = **inactif tant que RESEND_API_KEY n'est pas configuré** (la notification in-app fonctionne).
 
 ## Backlog
 - P1: Validation de stock avant commande (rejeter si insuffisant); frais de livraison par wilaya.

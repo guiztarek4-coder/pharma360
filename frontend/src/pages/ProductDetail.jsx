@@ -157,7 +157,7 @@ export default function ProductDetail() {
           </div>
 
           <div className="grid grid-cols-3 gap-3 mt-8">
-            {[[Truck, "Livraison à Alger"], [CreditCard, "Paiement livraison"], [ShieldCheck, "100% Original"]].map(([Icon, t], i) => (
+            {[[Truck, "Livraison Algérie"], [CreditCard, "Paiement livraison"], [ShieldCheck, "100% Original"]].map(([Icon, t], i) => (
               <div key={i} className="text-center p-3 rounded-2xl bg-mint-50/60 border border-mint-100">
                 <Icon className="w-5 h-5 text-mint-600 mx-auto mb-1.5" />
                 <div className="text-xs text-slate-600 font-medium">{t}</div>

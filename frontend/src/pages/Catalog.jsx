@@ -1,19 +1,21 @@
 import { useEffect, useState } from "react";
-import { useSearchParams, useParams } from "react-router-dom";
+import { useSearchParams, useParams, Link } from "react-router-dom";
 import { SlidersHorizontal, X } from "lucide-react";
 import api from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
-import { CATEGORIES } from "@/lib/site";
+import { useCategories } from "@/context/CategoriesContext";
 
 export default function Catalog() {
   const [params, setParams] = useSearchParams();
   const { categoryId } = useParams();
+  const { categories } = useCategories();
   const [products, setProducts] = useState([]);
   const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
 
   const category = categoryId || params.get("category") || "";
+  const subcategory = params.get("subcategory") || "";
   const brand = params.get("brand") || "";
   const search = params.get("search") || "";
   const onPromo = params.get("on_promo") || "";
@@ -22,12 +24,16 @@ export default function Catalog() {
   const sort = params.get("sort") || "recent";
   const maxPrice = params.get("max_price") || "";
 
+  const currentCat = categories.find((c) => c.id === category);
+  const subs = currentCat?.subcategories || [];
+
   useEffect(() => { api.get("/brands").then((r) => setBrands(r.data)); }, []);
 
   useEffect(() => {
     setLoading(true);
     const qs = new URLSearchParams();
     if (category) qs.set("category", category);
+    if (subcategory) qs.set("subcategory", subcategory);
     if (brand) qs.set("brand", brand);
     if (search) qs.set("search", search);
     if (onPromo) qs.set("on_promo", "true");
@@ -36,7 +42,7 @@ export default function Catalog() {
     if (sort) qs.set("sort", sort);
     if (maxPrice) qs.set("max_price", maxPrice);
     api.get(`/products?${qs.toString()}`).then((r) => { setProducts(r.data); setLoading(false); });
-  }, [category, brand, search, onPromo, isNew, featured, sort, maxPrice]);
+  }, [category, subcategory, brand, search, onPromo, isNew, featured, sort, maxPrice]);
 
   const update = (key, value) => {
     const next = new URLSearchParams(params);
@@ -45,7 +51,7 @@ export default function Catalog() {
     setParams(next);
   };
 
-  const catLabel = CATEGORIES.find((c) => c.id === category)?.label;
+  const catLabel = currentCat?.label;
   const title = catLabel || (search ? `Recherche : "${search}"` : onPromo ? "Promotions" : isNew ? "Nouveautés" : featured ? "Coups de cœur" : brand || "Catalogue");
 
   const clearAll = () => setParams(categoryId ? {} : {});
@@ -69,12 +75,24 @@ export default function Catalog() {
           className="w-full accent-mint-600" data-testid="filter-price" />
         <div className="text-sm text-slate-500 mt-1">{maxPrice ? `Jusqu'à ${maxPrice} DA` : "Tous les prix"}</div>
       </div>
+      {subs.length > 0 && (
+        <div>
+          <h4 className="font-display font-bold text-sm mb-3">Sous-catégories</h4>
+          <div className="space-y-1.5">
+            <button onClick={() => update("subcategory", "")} className={`block text-sm ${!subcategory ? "text-mint-700 font-semibold" : "text-slate-600"}`}>Toutes</button>
+            {subs.map((s) => (
+              <button key={s.id} onClick={() => update("subcategory", s.slug)} data-testid={`filter-sub-${s.id}`}
+                className={`block text-sm ${subcategory === s.slug ? "text-mint-700 font-semibold" : "text-slate-600"} hover:text-mint-700`}>{s.label}</button>
+            ))}
+          </div>
+        </div>
+      )}
       {!categoryId && (
         <div>
           <h4 className="font-display font-bold text-sm mb-3">Catégories</h4>
           <div className="space-y-1.5">
             <button onClick={() => update("category", "")} className={`block text-sm ${!category ? "text-mint-700 font-semibold" : "text-slate-600"}`}>Toutes</button>
-            {CATEGORIES.map((c) => (
+            {categories.map((c) => (
               <button key={c.id} onClick={() => update("category", c.id)} className={`block text-sm ${category === c.id ? "text-mint-700 font-semibold" : "text-slate-600"} hover:text-mint-700`}>{c.label}</button>
             ))}
           </div>

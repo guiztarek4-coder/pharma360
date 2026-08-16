@@ -16,10 +16,21 @@ const DEFAULTS = {
   facebook: "#",
   instagram: "#",
   tiktok: "#",
-  delivery_zone: "Alger uniquement",
+  delivery_zone: "Toutes les wilayas d'Algérie",
   delivery_fee: 500,
+  relais_fee: 350,
+  delivery_fees: {},
+  pickup_enabled: true,
   payment_cod_enabled: true,
   payment_card_enabled: true,
+  hero_image: null,
+  hero_title: "Prenez soin de votre peau & santé au meilleur prix",
+  hero_subtitle: "Cosmétiques et soins 100% originaux, livrés partout en Algérie. Payez à la livraison, en toute confiance.",
+  top_bar_messages: [
+    "Livraison rapide dans toutes les wilayas d'Algérie",
+    "Produits 100% Originaux & Authentiques",
+    "Expédition Express sous 24h–48h",
+  ],
 };
 
 export const SettingsProvider = ({ children }) => {

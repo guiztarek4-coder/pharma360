@@ -35,7 +35,9 @@ export default function OrderSuccess() {
             ))}
           </div>
           <div className="border-t border-mint-100 pt-4 space-y-1 text-sm">
-            <div className="flex justify-between text-slate-500"><span>Livraison ({order.wilaya})</span><span>{formatDA(order.delivery)}</span></div>
+            <div className="flex justify-between text-slate-500"><span>Sous-total</span><span>{formatDA(order.subtotal)}</span></div>
+            <div className="flex justify-between text-slate-500"><span>Livraison {order.delivery_method ? `(${order.delivery_method})` : `(${order.wilaya})`}</span><span>{order.delivery === 0 ? "Gratuit" : formatDA(order.delivery)}</span></div>
+            {order.discount > 0 && <div className="flex justify-between text-mint-700"><span>Remise {order.promo_code ? `(${order.promo_code})` : ""}</span><span>- {formatDA(order.discount)}</span></div>}
             <div className="flex justify-between font-display font-extrabold text-lg"><span>Total</span><span className="text-mint-700">{formatDA(order.total)}</span></div>
             <div className="text-xs text-slate-400 mt-2">Paiement : {order.payment_method === "card" ? "Carte (démo)" : "À la livraison"}</div>
           </div>

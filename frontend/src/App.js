@@ -4,6 +4,7 @@ import "@/index.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { SettingsProvider } from "@/context/SettingsContext";
+import { CategoriesProvider } from "@/context/CategoriesContext";
 import TopBar from "@/components/layout/TopBar";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -44,6 +45,7 @@ function App() {
         <AuthProvider>
           <CartProvider>
             <SettingsProvider>
+            <CategoriesProvider>
               <Shell>
               <Routes>
                 <Route path="/" element={<Home />} />
@@ -64,6 +66,7 @@ function App() {
               </Routes>
             </Shell>
             <Toaster position="top-center" richColors />
+            </CategoriesProvider>
             </SettingsProvider>
           </CartProvider>
         </AuthProvider>

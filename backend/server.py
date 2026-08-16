@@ -2,6 +2,7 @@ import os
 import uuid
 import jwt
 import bcrypt
+import asyncio
 import logging
 import requests
 from pathlib import Path
@@ -180,6 +181,7 @@ class ProductInput(BaseModel):
     name: str
     brand: str = ""
     category: str
+    subcategory: Optional[str] = None
     description: str = ""
     price: float
     old_price: Optional[float] = None
@@ -219,9 +221,34 @@ class OrderInput(BaseModel):
     phone: str
     wilaya: str
     commune: str = ""
-    street: str
+    street: str = ""
     payment_method: str  # "cod" | "card"
+    delivery_method: str = "domicile"  # "pickup" | "domicile" | "relais"
+    promo_code: str = ""
     notes: str = ""
+
+
+class ProductInputExtra(BaseModel):
+    subcategory: Optional[str] = None
+
+
+class CategoryInput(BaseModel):
+    label: str
+    icon: str = "Tag"
+    image: Optional[str] = None
+    order: int = 100
+
+
+class SubcategoryInput(BaseModel):
+    label: str
+    category: str  # parent category slug
+
+
+class PromoInput(BaseModel):
+    code: str
+    type: str = "percent"  # "percent" | "fixed"
+    value: float = 0
+    active: bool = True
 
 
 class ContactInput(BaseModel):
@@ -231,7 +258,83 @@ class ContactInput(BaseModel):
     message: str
 
 
-WILAYA_DELIVERY = 500  # flat delivery fee in DA
+WILAYAS = [
+    "Adrar","Chlef","Laghouat","Oum El Bouaghi","Batna","Béjaïa","Biskra","Béchar","Blida","Bouira",
+    "Tamanrasset","Tébessa","Tlemcen","Tiaret","Tizi Ouzou","Alger","Djelfa","Jijel","Sétif","Saïda",
+    "Skikda","Sidi Bel Abbès","Annaba","Guelma","Constantine","Médéa","Mostaganem","M'Sila","Mascara","Ouargla",
+    "Oran","El Bayadh","Illizi","Bordj Bou Arréridj","Boumerdès","El Tarf","Tindouf","Tissemsilt","El Oued","Khenchela",
+    "Souk Ahras","Tipaza","Mila","Aïn Defla","Naâma","Aïn Témouchent","Ghardaïa","Relizane",
+]
+WILAYA_DELIVERY = 500  # default flat delivery fee in DA
+
+
+def slugify(text: str) -> str:
+    import re, unicodedata
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    text = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
+    return text or uuid.uuid4().hex[:8]
+
+
+def send_order_email(order: dict):
+    """Send order notification email to shop owner (non-fatal)."""
+    api_key = os.environ.get("RESEND_API_KEY")
+    if not api_key:
+        return
+    try:
+        import resend
+        resend.api_key = api_key
+        sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+        to = os.environ.get("ORDER_EMAIL_TO") or os.environ.get("ADMIN_EMAIL", "pharma360benak@gmail.com")
+        rows = "".join(
+            f"<tr><td style='padding:6px 10px;border-bottom:1px solid #eee'>{i['quantity']}× {i['name']}</td>"
+            f"<td style='padding:6px 10px;border-bottom:1px solid #eee;text-align:right'>{int(i['price']*i['quantity'])} DA</td></tr>"
+            for i in order["items"]
+        )
+        html = f"""
+        <div style='font-family:Arial,sans-serif;max-width:560px;margin:auto'>
+          <h2 style='color:#059669'>🛒 Nouvelle commande Pharma360</h2>
+          <p><b>Client :</b> {order['full_name']} — {order['phone']}</p>
+          <p><b>Livraison :</b> {order.get('delivery_method')} · {order['wilaya']} {order.get('commune','')} {order.get('street','')}</p>
+          <p><b>Paiement :</b> {order['payment_method']}</p>
+          <table style='width:100%;border-collapse:collapse;margin:12px 0'>{rows}</table>
+          <p style='text-align:right'>Sous-total : {int(order['subtotal'])} DA<br/>
+          Livraison : {int(order['delivery'])} DA<br/>
+          Remise : {int(order.get('discount',0))} DA<br/>
+          <b style='font-size:18px;color:#059669'>Total : {int(order['total'])} DA</b></p>
+        </div>"""
+        resend.Emails.send({"from": sender, "to": [to], "subject": "Nouvelle commande Pharma360", "html": html})
+    except Exception as e:
+        logger.error(f"Email send failed: {e}")
+
+
+def normalize_dz_phone(phone: str) -> str:
+    p = "".join(c for c in (phone or "") if c.isdigit() or c == "+")
+    if p.startswith("+"):
+        return p
+    if p.startswith("00"):
+        return "+" + p[2:]
+    if p.startswith("0"):
+        return "+213" + p[1:]
+    if p.startswith("213"):
+        return "+" + p
+    return "+213" + p
+
+
+def send_status_sms(phone: str, order_ref: str, status: str):
+    """Send order status SMS to the customer (non-fatal, requires Twilio env)."""
+    sid = os.environ.get("TWILIO_ACCOUNT_SID")
+    token = os.environ.get("TWILIO_AUTH_TOKEN")
+    from_number = os.environ.get("TWILIO_PHONE_NUMBER")
+    if not (sid and token and from_number and phone):
+        return
+    try:
+        from twilio.rest import Client
+        client = Client(sid, token)
+        to = normalize_dz_phone(phone)
+        body = f"Pharma360 : votre commande #{order_ref} est maintenant \"{status}\". Merci pour votre confiance !"
+        client.messages.create(body=body, from_=from_number, to=to)
+    except Exception as e:
+        logger.error(f"SMS send failed: {e}")
 
 
 # ----------------------------------------------------------------------------
@@ -319,6 +422,7 @@ async def delete_address(addr_id: str, user: dict = Depends(get_current_user)):
 @api.get("/products")
 async def list_products(
     category: Optional[str] = None,
+    subcategory: Optional[str] = None,
     brand: Optional[str] = None,
     search: Optional[str] = None,
     need: Optional[str] = None,
@@ -333,6 +437,8 @@ async def list_products(
     q = {}
     if category:
         q["category"] = category
+    if subcategory:
+        q["subcategory"] = subcategory
     if brand:
         q["brand"] = brand
     if need:
@@ -344,11 +450,13 @@ async def list_products(
     if on_promo:
         q["old_price"] = {"$ne": None, "$gt": 0}
     if search:
-        q["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"brand": {"$regex": search, "$options": "i"}},
-            {"description": {"$regex": search, "$options": "i"}},
-        ]
+        terms = [t for t in search.split() if t]
+        q["$and"] = [{"$or": [
+            {"name": {"$regex": t, "$options": "i"}},
+            {"brand": {"$regex": t, "$options": "i"}},
+            {"category": {"$regex": t, "$options": "i"}},
+            {"description": {"$regex": t, "$options": "i"}},
+        ]} for t in terms] or [{}]
     price_q = {}
     if min_price is not None:
         price_q["$gte"] = min_price
@@ -433,7 +541,168 @@ CATEGORIES = [
 
 @api.get("/categories")
 async def get_categories():
-    return CATEGORIES
+    cats = await db.categories.find().sort("order", 1).to_list(200)
+    if not cats:
+        return [{"id": c["id"], "slug": c["id"], **c} for c in CATEGORIES]
+    result = []
+    for c in cats:
+        subs = await db.subcategories.find({"category": c["slug"]}).sort("label", 1).to_list(100)
+        result.append({
+            "id": c["slug"], "slug": c["slug"], "label": c["label"],
+            "icon": c.get("icon", "Tag"), "image": c.get("image"),
+            "order": c.get("order", 100),
+            "cat_id": str(c["_id"]),
+            "subcategories": [{"id": str(s["_id"]), "label": s["label"], "slug": s["slug"]} for s in subs],
+        })
+    return result
+
+
+@api.post("/categories")
+async def create_category(data: CategoryInput, admin: dict = Depends(get_admin_user)):
+    slug = slugify(data.label)
+    if await db.categories.find_one({"slug": slug}):
+        slug = f"{slug}-{uuid.uuid4().hex[:4]}"
+    doc = {"slug": slug, "label": data.label, "icon": data.icon, "image": data.image, "order": data.order,
+           "created_at": now_utc().isoformat()}
+    res = await db.categories.insert_one(doc)
+    doc["_id"] = res.inserted_id
+    return clean(doc)
+
+
+@api.put("/categories/{cat_id}")
+async def update_category(cat_id: str, data: CategoryInput, admin: dict = Depends(get_admin_user)):
+    await db.categories.update_one({"_id": ObjectId(cat_id)},
+                                   {"$set": {"label": data.label, "icon": data.icon, "image": data.image, "order": data.order}})
+    doc = await db.categories.find_one({"_id": ObjectId(cat_id)})
+    return clean(doc)
+
+
+@api.delete("/categories/{cat_id}")
+async def delete_category(cat_id: str, admin: dict = Depends(get_admin_user)):
+    doc = await db.categories.find_one({"_id": ObjectId(cat_id)})
+    if doc:
+        await db.subcategories.delete_many({"category": doc["slug"]})
+    await db.categories.delete_one({"_id": ObjectId(cat_id)})
+    return {"ok": True}
+
+
+# Subcategories
+@api.get("/subcategories")
+async def list_subcategories(category: Optional[str] = None):
+    q = {"category": category} if category else {}
+    return [clean(d) for d in await db.subcategories.find(q).sort("label", 1).to_list(300)]
+
+
+@api.post("/subcategories")
+async def create_subcategory(data: SubcategoryInput, admin: dict = Depends(get_admin_user)):
+    doc = {"label": data.label, "category": data.category, "slug": slugify(data.label),
+           "created_at": now_utc().isoformat()}
+    res = await db.subcategories.insert_one(doc)
+    doc["_id"] = res.inserted_id
+    return clean(doc)
+
+
+@api.put("/subcategories/{sub_id}")
+async def update_subcategory(sub_id: str, data: SubcategoryInput, admin: dict = Depends(get_admin_user)):
+    await db.subcategories.update_one({"_id": ObjectId(sub_id)},
+                                      {"$set": {"label": data.label, "category": data.category, "slug": slugify(data.label)}})
+    doc = await db.subcategories.find_one({"_id": ObjectId(sub_id)})
+    return clean(doc)
+
+
+@api.delete("/subcategories/{sub_id}")
+async def delete_subcategory(sub_id: str, admin: dict = Depends(get_admin_user)):
+    await db.subcategories.delete_one({"_id": ObjectId(sub_id)})
+    return {"ok": True}
+
+
+# Promo codes
+@api.get("/promo-codes")
+async def list_promo(admin: dict = Depends(get_admin_user)):
+    return [clean(d) for d in await db.promo_codes.find().sort("created_at", -1).to_list(200)]
+
+
+@api.post("/promo-codes")
+async def create_promo(data: PromoInput, admin: dict = Depends(get_admin_user)):
+    doc = {"code": data.code.strip().upper(), "type": data.type, "value": data.value,
+           "active": data.active, "created_at": now_utc().isoformat()}
+    res = await db.promo_codes.insert_one(doc)
+    doc["_id"] = res.inserted_id
+    return clean(doc)
+
+
+@api.put("/promo-codes/{promo_id}")
+async def update_promo(promo_id: str, data: PromoInput, admin: dict = Depends(get_admin_user)):
+    await db.promo_codes.update_one({"_id": ObjectId(promo_id)},
+                                    {"$set": {"code": data.code.strip().upper(), "type": data.type, "value": data.value, "active": data.active}})
+    doc = await db.promo_codes.find_one({"_id": ObjectId(promo_id)})
+    return clean(doc)
+
+
+@api.delete("/promo-codes/{promo_id}")
+async def delete_promo(promo_id: str, admin: dict = Depends(get_admin_user)):
+    await db.promo_codes.delete_one({"_id": ObjectId(promo_id)})
+    return {"ok": True}
+
+
+# Notifications
+@api.get("/notifications")
+async def list_notifications(admin: dict = Depends(get_admin_user)):
+    notifs = [clean(d) for d in await db.notifications.find().sort("created_at", -1).to_list(100)]
+    unread = await db.notifications.count_documents({"read": False})
+    return {"notifications": notifs, "unread": unread}
+
+
+@api.post("/notifications/read")
+async def mark_notifications_read(admin: dict = Depends(get_admin_user)):
+    await db.notifications.update_many({"read": False}, {"$set": {"read": True}})
+    return {"ok": True}
+
+
+# Customers
+@api.get("/customers")
+async def list_customers(admin: dict = Depends(get_admin_user)):
+    users = await db.users.find({"role": "customer"}).sort("created_at", -1).to_list(1000)
+    result = []
+    for u in users:
+        count = await db.orders.count_documents({"user_id": str(u["_id"])})
+        result.append({
+            "id": str(u["_id"]),
+            "first_name": u.get("first_name"), "last_name": u.get("last_name"),
+            "email": u.get("email"), "phone": u.get("phone"),
+            "created_at": u.get("created_at"), "orders_count": count,
+        })
+    return result
+
+
+@api.get("/customers/{customer_id}/orders")
+async def customer_orders(customer_id: str, admin: dict = Depends(get_admin_user)):
+    return [clean(d) for d in await db.orders.find({"user_id": customer_id}).sort("created_at", -1).to_list(200)]
+
+
+# Admin account (change own email / password)
+@api.put("/admin/account")
+async def update_admin_account(payload: dict, admin: dict = Depends(get_admin_user)):
+    current = payload.get("current_password") or ""
+    if not verify_password(current, admin["password_hash"]):
+        raise HTTPException(status_code=400, detail="Mot de passe actuel incorrect")
+    updates = {}
+    new_email = (payload.get("email") or "").strip().lower()
+    if new_email and new_email != admin.get("email"):
+        if await db.users.find_one({"email": new_email, "_id": {"$ne": admin["_id"]}}):
+            raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+        updates["email"] = new_email
+    if payload.get("first_name"):
+        updates["first_name"] = payload["first_name"].strip()
+    new_pw = payload.get("new_password") or ""
+    if new_pw:
+        if len(new_pw) < 6:
+            raise HTTPException(status_code=400, detail="Le mot de passe doit contenir au moins 6 caractères")
+        updates["password_hash"] = hash_password(new_pw)
+    if updates:
+        await db.users.update_one({"_id": admin["_id"]}, {"$set": updates})
+    doc = await db.users.find_one({"_id": admin["_id"]})
+    return clean(doc)
 
 
 # ----------------------------------------------------------------------------
@@ -515,17 +784,50 @@ async def delete_blog(post_id: str, admin: dict = Depends(get_admin_user)):
 # ----------------------------------------------------------------------------
 # Orders
 # ----------------------------------------------------------------------------
-def compute_totals(items):
-    subtotal = sum(i.price * i.quantity for i in items)
-    delivery = WILAYA_DELIVERY if subtotal > 0 else 0
-    return subtotal, delivery, subtotal + delivery
+def compute_subtotal(items):
+    return sum(i.price * i.quantity for i in items)
+
+
+async def compute_delivery(method: str, wilaya: str, subtotal: float) -> float:
+    if subtotal <= 0 or method == "pickup":
+        return 0
+    s = await db.settings.find_one({"_id": "site"}) or {}
+    fees = s.get("delivery_fees") or {}
+    if method == "relais":
+        return float(s.get("relais_fee", 350))
+    return float(fees.get(wilaya, s.get("delivery_fee", WILAYA_DELIVERY)))
+
+
+async def apply_promo(code: str, subtotal: float) -> float:
+    if not code:
+        return 0
+    promo = await db.promo_codes.find_one({"code": code.strip().upper(), "active": True})
+    if not promo:
+        return 0
+    if promo["type"] == "percent":
+        return round(subtotal * promo["value"] / 100, 2)
+    return min(float(promo["value"]), subtotal)
+
+
+@api.post("/promo/validate")
+async def validate_promo(payload: dict):
+    code = (payload.get("code") or "").strip().upper()
+    subtotal = float(payload.get("subtotal") or 0)
+    promo = await db.promo_codes.find_one({"code": code, "active": True})
+    if not promo:
+        raise HTTPException(status_code=404, detail="Code promo invalide ou expiré")
+    discount = await apply_promo(code, subtotal)
+    return {"code": code, "discount": discount, "type": promo["type"], "value": promo["value"]}
 
 
 @api.post("/orders")
 async def create_order(data: OrderInput, request: Request):
     if not data.items:
         raise HTTPException(status_code=400, detail="Le panier est vide")
-    subtotal, delivery, total = compute_totals(data.items)
+    subtotal = compute_subtotal(data.items)
+    delivery = await compute_delivery(data.delivery_method, data.wilaya, subtotal)
+    discount = await apply_promo(data.promo_code, subtotal)
+    total = max(0, subtotal + delivery - discount)
     user = None
     try:
         user = await get_current_user(request)
@@ -535,6 +837,8 @@ async def create_order(data: OrderInput, request: Request):
         "items": [i.model_dump() for i in data.items],
         "subtotal": subtotal,
         "delivery": delivery,
+        "discount": discount,
+        "promo_code": data.promo_code.strip().upper() if data.promo_code else "",
         "total": total,
         "full_name": data.full_name,
         "phone": data.phone,
@@ -542,6 +846,7 @@ async def create_order(data: OrderInput, request: Request):
         "commune": data.commune,
         "street": data.street,
         "payment_method": data.payment_method,
+        "delivery_method": data.delivery_method,
         "payment_status": "paid" if data.payment_method == "card" else "pending",
         "notes": data.notes,
         "status": "En attente",
@@ -549,12 +854,21 @@ async def create_order(data: OrderInput, request: Request):
         "created_at": now_utc().isoformat(),
     }
     res = await db.orders.insert_one(order)
-    # decrement stock
+    order["_id"] = res.inserted_id
     for item in data.items:
         if ObjectId.is_valid(item.product_id):
             await db.products.update_one({"_id": ObjectId(item.product_id)},
                                          {"$inc": {"stock": -item.quantity}})
-    order["_id"] = res.inserted_id
+    # admin notification (in-app)
+    await db.notifications.insert_one({
+        "type": "order",
+        "order_id": str(res.inserted_id),
+        "message": f"Nouvelle commande de {data.full_name} — {int(total)} DA",
+        "read": False,
+        "created_at": now_utc().isoformat(),
+    })
+    # email notification (non-blocking)
+    asyncio.create_task(asyncio.to_thread(send_order_email, order))
     return clean(order)
 
 
@@ -572,9 +886,12 @@ async def all_orders(admin: dict = Depends(get_admin_user)):
 
 @api.put("/orders/{order_id}/status")
 async def update_order_status(order_id: str, payload: dict, admin: dict = Depends(get_admin_user)):
-    await db.orders.update_one({"_id": ObjectId(order_id)},
-                               {"$set": {"status": payload.get("status", "En attente")}})
+    status = payload.get("status", "En attente")
+    await db.orders.update_one({"_id": ObjectId(order_id)}, {"$set": {"status": status}})
     doc = await db.orders.find_one({"_id": ObjectId(order_id)})
+    if doc:
+        ref = str(doc["_id"])[-8:].upper()
+        asyncio.create_task(asyncio.to_thread(send_status_sms, doc.get("phone", ""), ref, status))
     return clean(doc)
 
 
@@ -660,6 +977,10 @@ async def seed():
 
     if await db.products.count_documents({}) > 0:
         return
+
+    if await db.promo_codes.count_documents({}) == 0:
+        await db.promo_codes.insert_one({"code": "BIENVENUE10", "type": "percent", "value": 10,
+                                         "active": True, "created_at": now_utc().isoformat()})
 
     brands = [
         {"name": "La Roche-Posay", "logo": "https://images.unsplash.com/photo-1631730486784-9e5b8e5c5c1e?w=200"},
@@ -772,11 +1093,50 @@ DEFAULT_SETTINGS = {
     "facebook": "#",
     "instagram": "#",
     "tiktok": "#",
-    "delivery_zone": "Alger uniquement",
+    "delivery_zone": "Toutes les wilayas d'Algérie",
     "delivery_fee": 500,
+    "relais_fee": 350,
+    "delivery_fees": {},
+    "pickup_enabled": True,
     "payment_cod_enabled": True,
     "payment_card_enabled": True,
+    "hero_image": None,
+    "hero_title": "Prenez soin de votre peau & santé au meilleur prix",
+    "hero_subtitle": "Cosmétiques et soins 100% originaux, livrés partout en Algérie. Payez à la livraison, en toute confiance.",
+    "top_bar_messages": [
+        "Livraison rapide dans toutes les wilayas d'Algérie",
+        "Produits 100% Originaux & Authentiques",
+        "Expédition Express sous 24h–48h",
+    ],
 }
+
+
+CATEGORY_IMAGES_SEED = {
+    "sante": "https://images.unsplash.com/photo-1607619056574-7b8d3ee536b2?w=500",
+    "visage": "https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=500",
+    "corps": "https://images.unsplash.com/photo-1612817288484-6f916006741a?w=500",
+    "cheveux": "https://images.unsplash.com/photo-1522337660859-02fbefca4702?w=500",
+    "hygiene": "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=500",
+    "bebe-maman": "https://images.unsplash.com/photo-1778276551433-75420636007d?w=500",
+    "solaire": "https://images.unsplash.com/photo-1556228841-a3c527ebefe5?w=500",
+    "homme-sport": "https://images.unsplash.com/photo-1669322779651-5ca89652492e?w=500",
+    "complements": "https://images.unsplash.com/photo-1664956618021-73c47736845e?w=500",
+    "minceur": "https://images.unsplash.com/photo-1523901839036-a3030662f220?w=500",
+    "nature-bio": "https://images.unsplash.com/photo-1760108249194-f9cafd970762?w=500",
+    "animaux": "https://images.unsplash.com/photo-1571873735645-1ae72b963024?w=500",
+    "materiel-medical": "https://images.unsplash.com/photo-1700832082200-af7deeb63d9b?w=500",
+}
+
+
+async def ensure_categories():
+    if await db.categories.count_documents({}) > 0:
+        return
+    for i, c in enumerate(CATEGORIES):
+        await db.categories.insert_one({
+            "slug": c["id"], "label": c["label"], "icon": c["icon"],
+            "image": CATEGORY_IMAGES_SEED.get(c["id"]), "order": i,
+            "created_at": now_utc().isoformat(),
+        })
 
 
 async def ensure_settings():
@@ -867,6 +1227,7 @@ async def startup():
         logger.error(f"Storage init failed: {e}")
     await seed()
     await ensure_settings()
+    await ensure_categories()
 
 
 @app.on_event("shutdown")
