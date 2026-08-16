@@ -338,36 +338,6 @@ def send_customer_email(order: dict, sender: str = None):
         logger.error(f"Customer email failed: {e}")
 
 
-def normalize_dz_phone(phone: str) -> str:
-    p = "".join(c for c in (phone or "") if c.isdigit() or c == "+")
-    if p.startswith("+"):
-        return p
-    if p.startswith("00"):
-        return "+" + p[2:]
-    if p.startswith("0"):
-        return "+213" + p[1:]
-    if p.startswith("213"):
-        return "+" + p
-    return "+213" + p
-
-
-def send_status_sms(phone: str, order_ref: str, status: str):
-    """Send order status SMS to the customer (non-fatal, requires Twilio env)."""
-    sid = os.environ.get("TWILIO_ACCOUNT_SID")
-    token = os.environ.get("TWILIO_AUTH_TOKEN")
-    from_number = os.environ.get("TWILIO_PHONE_NUMBER")
-    if not (sid and token and from_number and phone):
-        return
-    try:
-        from twilio.rest import Client
-        client = Client(sid, token)
-        to = normalize_dz_phone(phone)
-        body = f"Pharma360 : votre commande #{order_ref} est maintenant \"{status}\". Merci pour votre confiance !"
-        client.messages.create(body=body, from_=from_number, to=to)
-    except Exception as e:
-        logger.error(f"SMS send failed: {e}")
-
-
 # ----------------------------------------------------------------------------
 # Auth routes
 # ----------------------------------------------------------------------------
@@ -924,9 +894,6 @@ async def update_order_status(order_id: str, payload: dict, admin: dict = Depend
     status = payload.get("status", "En attente")
     await db.orders.update_one({"_id": ObjectId(order_id)}, {"$set": {"status": status}})
     doc = await db.orders.find_one({"_id": ObjectId(order_id)})
-    if doc:
-        ref = str(doc["_id"])[-8:].upper()
-        asyncio.create_task(asyncio.to_thread(send_status_sms, doc.get("phone", ""), ref, status))
     return clean(doc)
 
 
