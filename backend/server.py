@@ -219,6 +219,7 @@ class OrderInput(BaseModel):
     items: List[OrderItem]
     full_name: str
     phone: str
+    email: Optional[str] = None
     wilaya: str
     commune: str = ""
     street: str = ""
@@ -275,7 +276,7 @@ def slugify(text: str) -> str:
     return text or uuid.uuid4().hex[:8]
 
 
-def send_order_email(order: dict):
+def send_order_email(order: dict, sender: str = None, to: str = None):
     """Send order notification email to shop owner (non-fatal)."""
     api_key = os.environ.get("RESEND_API_KEY")
     if not api_key:
@@ -283,8 +284,8 @@ def send_order_email(order: dict):
     try:
         import resend
         resend.api_key = api_key
-        sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
-        to = os.environ.get("ORDER_EMAIL_TO") or os.environ.get("ADMIN_EMAIL", "pharma360benak@gmail.com")
+        sender = sender or os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+        to = to or os.environ.get("ORDER_EMAIL_TO") or os.environ.get("ADMIN_EMAIL", "pharma360benak@gmail.com")
         rows = "".join(
             f"<tr><td style='padding:6px 10px;border-bottom:1px solid #eee'>{i['quantity']}× {i['name']}</td>"
             f"<td style='padding:6px 10px;border-bottom:1px solid #eee;text-align:right'>{int(i['price']*i['quantity'])} DA</td></tr>"
@@ -305,6 +306,36 @@ def send_order_email(order: dict):
         resend.Emails.send({"from": sender, "to": [to], "subject": "Nouvelle commande Pharma360", "html": html})
     except Exception as e:
         logger.error(f"Email send failed: {e}")
+
+
+def send_customer_email(order: dict, sender: str = None):
+    """Send order confirmation email to the customer (non-fatal, needs verified domain)."""
+    api_key = os.environ.get("RESEND_API_KEY")
+    to = order.get("email")
+    if not api_key or not to:
+        return
+    try:
+        import resend
+        resend.api_key = api_key
+        sender = sender or os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+        ref = str(order.get("_id", ""))[-8:].upper()
+        rows = "".join(
+            f"<tr><td style='padding:6px 10px;border-bottom:1px solid #eee'>{i['quantity']}× {i['name']}</td>"
+            f"<td style='padding:6px 10px;border-bottom:1px solid #eee;text-align:right'>{int(i['price']*i['quantity'])} DA</td></tr>"
+            for i in order["items"]
+        )
+        html = f"""
+        <div style='font-family:Arial,sans-serif;max-width:560px;margin:auto'>
+          <h2 style='color:#059669'>Merci pour votre commande Pharma360 !</h2>
+          <p>Bonjour {order['full_name']}, votre commande <b>#{ref}</b> a bien été enregistrée.</p>
+          <table style='width:100%;border-collapse:collapse;margin:12px 0'>{rows}</table>
+          <p style='text-align:right'>Livraison : {int(order['delivery'])} DA<br/>
+          <b style='font-size:18px;color:#059669'>Total : {int(order['total'])} DA</b></p>
+          <p>Nous vous contacterons bientôt pour la livraison. Merci de votre confiance !</p>
+        </div>"""
+        resend.Emails.send({"from": sender, "to": [to], "subject": f"Confirmation de votre commande #{ref} - Pharma360", "html": html})
+    except Exception as e:
+        logger.error(f"Customer email failed: {e}")
 
 
 def normalize_dz_phone(phone: str) -> str:
@@ -842,6 +873,7 @@ async def create_order(data: OrderInput, request: Request):
         "total": total,
         "full_name": data.full_name,
         "phone": data.phone,
+        "email": (data.email or "").strip().lower() or None,
         "wilaya": data.wilaya,
         "commune": data.commune,
         "street": data.street,
@@ -868,7 +900,10 @@ async def create_order(data: OrderInput, request: Request):
         "created_at": now_utc().isoformat(),
     })
     # email notification (non-blocking)
-    asyncio.create_task(asyncio.to_thread(send_order_email, order))
+    s = await db.settings.find_one({"_id": "site"}) or {}
+    sender = s.get("sender_email") or os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+    asyncio.create_task(asyncio.to_thread(send_order_email, order, sender))
+    asyncio.create_task(asyncio.to_thread(send_customer_email, order, sender))
     return clean(order)
 
 
@@ -1088,6 +1123,7 @@ DEFAULT_SETTINGS = {
     "phone": "0500 00 00 00",
     "phone_link": "+213500000000",
     "email": "contact@pharma360-dz.com",
+    "sender_email": "onboarding@resend.dev",
     "address": "Adresse à définir, Alger, Algérie",
     "horaires": "7j/7 — 08h00 à 22h00",
     "facebook": "#",

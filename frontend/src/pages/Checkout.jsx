@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Truck, CreditCard, ShoppingBag, Store, MapPin, Tag, Check } from "lucide-react";
 import { toast } from "sonner";
@@ -21,6 +21,7 @@ export default function Checkout() {
   const [form, setForm] = useState({
     full_name: user ? `${user.first_name} ${user.last_name}` : "",
     phone: user?.phone || "",
+    email: user?.email || "",
     wilaya: "Alger",
     commune: "",
     street: "",
@@ -28,6 +29,15 @@ export default function Checkout() {
   });
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  useEffect(() => {
+    if (user) setForm((f) => ({
+      ...f,
+      full_name: f.full_name || `${user.first_name} ${user.last_name}`,
+      phone: f.phone || user.phone || "",
+      email: f.email || user.email || "",
+    }));
+  }, [user]);
 
   const deliveryFee = (() => {
     if (deliveryMethod === "pickup" || items.length === 0) return 0;
@@ -109,6 +119,9 @@ export default function Checkout() {
             <div className="grid sm:grid-cols-2 gap-4">
               <Field label="Nom complet *" value={form.full_name} onChange={set("full_name")} testid="checkout-name" />
               <Field label="Téléphone *" value={form.phone} onChange={set("phone")} testid="checkout-phone" placeholder="05XX XX XX XX" />
+              <div className="sm:col-span-2">
+                <Field label="Email (pour recevoir la confirmation)" value={form.email} onChange={set("email")} testid="checkout-email" placeholder="votre@email.com" />
+              </div>
               {deliveryMethod !== "pickup" && (
                 <>
                   <div>

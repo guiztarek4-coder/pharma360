@@ -11,6 +11,7 @@ const DEFAULTS = {
   phone: "0500 00 00 00",
   phone_link: "+213500000000",
   email: "contact@pharma360-dz.com",
+  sender_email: "onboarding@resend.dev",
   address: "Adresse à définir, Alger, Algérie",
   horaires: "7j/7 — 08h00 à 22h00",
   facebook: "#",

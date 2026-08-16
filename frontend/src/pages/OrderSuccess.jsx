@@ -3,6 +3,7 @@ import { useParams, useLocation, Link } from "react-router-dom";
 import { CheckCircle2, Package, Phone } from "lucide-react";
 import api, { formatDA } from "@/lib/api";
 import { useSettings } from "@/context/SettingsContext";
+import StatusTracker from "@/components/StatusTracker";
 
 export default function OrderSuccess() {
   const { id } = useParams();
@@ -26,6 +27,7 @@ export default function OrderSuccess() {
             <div><div className="text-xs text-slate-400 font-mono-label">N° Commande</div><div className="font-semibold">#{id.slice(-8).toUpperCase()}</div></div>
             <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">{order.status}</span>
           </div>
+          <div className="py-5 border-b border-mint-100"><StatusTracker status={order.status} /></div>
           <div className="py-4 space-y-2">
             {order.items?.map((it, i) => (
               <div key={i} className="flex justify-between text-sm">

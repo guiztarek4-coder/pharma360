@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import api, { formatDA, formatApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { WILAYAS } from "@/lib/site";
+import StatusTracker from "@/components/StatusTracker";
 
 function AuthForm() {
   const { login, register } = useAuth();
@@ -130,6 +131,7 @@ function Dashboard() {
                   <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">{o.status}</span>
                 </div>
                 <div className="mt-3 text-sm text-slate-600">{o.items.map((i) => `${i.quantity}× ${i.name}`).join(", ")}</div>
+                <div className="mt-4 pt-4 border-t border-mint-50"><StatusTracker status={o.status} /></div>
                 <div className="mt-3 flex justify-between items-center"><span className="text-xs text-slate-400">{o.payment_method === "card" ? "Carte (démo)" : "À la livraison"}</span><span className="font-display font-bold text-mint-700">{formatDA(o.total)}</span></div>
               </div>
             ))}

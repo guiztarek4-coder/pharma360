@@ -599,6 +599,7 @@ function SettingsPanel() {
           <L label="Téléphone (affiché)"><input value={f.phone} onChange={(e) => set("phone", e.target.value)} data-testid="set-phone" className={inp} /></L>
           <L label="Téléphone (lien tel:)"><input value={f.phone_link} onChange={(e) => set("phone_link", e.target.value)} placeholder="+213..." className={inp} /></L>
           <L label="Email"><input value={f.email} onChange={(e) => set("email", e.target.value)} className={inp} /></L>
+          <L label="Email expéditeur (Resend)"><input value={f.sender_email || ""} onChange={(e) => set("sender_email", e.target.value)} placeholder="commandes@votredomaine.com" data-testid="set-sender" className={inp} /></L>
           <L label="Horaires"><input value={f.horaires} onChange={(e) => set("horaires", e.target.value)} className={inp} /></L>
           <div className="sm:col-span-2"><L label="Adresse"><input value={f.address} onChange={(e) => set("address", e.target.value)} data-testid="set-address" className={inp} /></L></div>
         </div>
