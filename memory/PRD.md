@@ -42,6 +42,16 @@ Site e-commerce de parapharmacie "Pharma360" basé en Algérie, inspiré de phar
 - Admin peut changer nom/email/mot de passe depuis l'onglet Compte.
 - Responsive mobile amélioré.
 
+## Implemented (2026-08-17 — iteration 6)
+- **Catégories hiérarchiques 3 niveaux** (Catégorie → Sous-catégorie → Sous-sous-catégorie), arbre auto-référencé (`parent_id`, `level`), profondeur STRICTEMENT limitée à 3 (MAX_LEVEL=2, HTTP 400 au 4e niveau).
+- Image à chaque niveau. Endpoints: `GET /api/categories` (arbre imbriqué), `GET /api/categories/{id}` (category + ancestors + children), `POST/PUT/DELETE /api/categories` (delete cascade sur descendants + nullifie `category_id` produits). Anciens endpoints `/api/subcategories` SUPPRIMÉS.
+- Produits liés au nœud feuille via `category_id`. `GET /api/products?category_id={leaf}`.
+- Navigation client (drill-down): clic sur une catégorie → si enfants, cartes des sous-catégories (avec images) + fil d'ariane; si feuille, grille produits + filtres marque/prix/tri.
+- Header: menu déroulant multi-niveaux (desktop flyout 3 niveaux, mobile accordéon imbriqué).
+- Admin: onglet Catégories en arborescence (add/edit/delete + upload image à chaque niveau, bouton "+" masqué au niveau 3); formulaire produit avec sélecteurs en cascade (pf-cat-level-0/1/2).
+- Seed migration `cat_tree_v1`: 13 catégories principales × 2 sous × 2 sous-sous + ~104 produits d'exemple (données de démo à remplacer par les vraies).
+- Tests: backend 15/15, flux frontend 100%.
+
 ## Known Limitations / MOCKED
 - Paiement en ligne par carte (CIB/Edahabia) = **SIMULÉ (démo)**. Stripe ne supporte pas l'Algérie (DZ), donc pas de passerelle réelle. La commande carte est marquée "payée" sans transaction réelle.
 - Email de notification de commande = **inactif tant que RESEND_API_KEY n'est pas configuré** (la notification in-app fonctionne).

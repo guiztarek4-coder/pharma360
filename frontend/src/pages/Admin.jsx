@@ -57,16 +57,45 @@ function ImageUpload({ value, onChange }) {
   );
 }
 
-const emptyProduct = { name: "", brand: "", category: "", subcategory: "", description: "", price: 0, old_price: null, stock: 0, images: [], badge: "", is_featured: false, is_new: false, need: "" };
+const emptyProduct = { name: "", brand: "", category: "", category_id: "", subcategory: "", description: "", price: 0, old_price: null, stock: 0, images: [], badge: "", is_featured: false, is_new: false, need: "" };
+
+function CategoryPathSelector({ value, onChange }) {
+  const { categories, findById, getAncestors } = useCategories();
+  const path = value ? getAncestors(value) : [];
+  // Build the chain of selects: level 0 = top categories, then children of each selected node.
+  const levels = [{ opts: categories, selectedId: path[0]?.id || "" }];
+  for (let i = 0; i < path.length; i++) {
+    const n = path[i];
+    if (n?.children?.length) levels.push({ opts: n.children, selectedId: path[i + 1]?.id || "" });
+  }
+  const levelLabels = ["Catégorie", "Sous-catégorie", "Sous-sous-catégorie"];
+  const leaf = value ? findById(value) : null;
+  const isLeaf = leaf && (!leaf.children || leaf.children.length === 0);
+  return (
+    <div className="space-y-2">
+      {levels.map((lv, i) => (
+        <L key={i} label={levelLabels[i] || `Niveau ${i + 1}`}>
+          <select value={lv.selectedId} onChange={(e) => onChange(e.target.value)} data-testid={`pf-cat-level-${i}`} className={inp}>
+            <option value="">— Choisir —</option>
+            {lv.opts.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+        </L>
+      ))}
+      {value && !isLeaf && <p className="text-xs text-amber-600">Sélectionnez jusqu'au dernier niveau (catégorie sans sous-catégorie).</p>}
+    </div>
+  );
+}
 
 function ProductForm({ product, brands, categories, onClose, onSaved }) {
-  const [f, setF] = useState(product || { ...emptyProduct, category: categories[0]?.id || "" });
+  const { findById } = useCategories();
+  const [f, setF] = useState(product || { ...emptyProduct });
   const set = (k, v) => setF({ ...f, [k]: v });
-  const cat = categories.find((c) => c.id === f.category);
-  const subs = cat?.subcategories || [];
   const save = async () => {
     if (!f.name || !f.price) { toast.error("Nom et prix requis"); return; }
-    const payload = { ...f, price: Number(f.price), old_price: f.old_price ? Number(f.old_price) : null, stock: Number(f.stock), badge: f.badge || null, need: f.need || null, subcategory: f.subcategory || null };
+    const leaf = f.category_id ? findById(f.category_id) : null;
+    if (!f.category_id || !leaf) { toast.error("Choisissez une catégorie"); return; }
+    if (leaf.children && leaf.children.length > 0) { toast.error("Choisissez la catégorie la plus profonde (sans sous-catégorie)"); return; }
+    const payload = { ...f, price: Number(f.price), old_price: f.old_price ? Number(f.old_price) : null, stock: Number(f.stock), badge: f.badge || null, need: f.need || null, category_id: f.category_id, category: leaf.slug, subcategory: null };
     try {
       if (f.id) await api.put(`/products/${f.id}`, payload); else await api.post("/products", payload);
       toast.success("Produit enregistré"); onSaved();
@@ -75,16 +104,9 @@ function ProductForm({ product, brands, categories, onClose, onSaved }) {
   return (
     <Modal title={f.id ? "Modifier le produit" : "Nouveau produit"} onClose={onClose} wide>
       <L label="Nom"><input value={f.name} onChange={(e) => set("name", e.target.value)} data-testid="pf-name" className={inp} /></L>
-      <div className="grid grid-cols-2 gap-3">
-        <L label="Marque"><input list="brandlist" value={f.brand} onChange={(e) => set("brand", e.target.value)} className={inp} />
-          <datalist id="brandlist">{brands.map((b) => <option key={b.id} value={b.name} />)}</datalist></L>
-        <L label="Catégorie"><select value={f.category} onChange={(e) => set("category", e.target.value)} data-testid="pf-category" className={inp}>{categories.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></L>
-      </div>
-      {subs.length > 0 && (
-        <L label="Sous-catégorie"><select value={f.subcategory || ""} onChange={(e) => set("subcategory", e.target.value)} data-testid="pf-subcategory" className={inp}>
-          <option value="">— Aucune —</option>{subs.map((s) => <option key={s.id} value={s.slug}>{s.label}</option>)}
-        </select></L>
-      )}
+      <L label="Marque"><input list="brandlist" value={f.brand} onChange={(e) => set("brand", e.target.value)} className={inp} />
+        <datalist id="brandlist">{brands.map((b) => <option key={b.id} value={b.name} />)}</datalist></L>
+      <CategoryPathSelector value={f.category_id} onChange={(id) => set("category_id", id)} />
       <div className="grid grid-cols-3 gap-3">
         <L label="Prix (DA)"><input type="number" value={f.price} onChange={(e) => set("price", e.target.value)} data-testid="pf-price" className={inp} /></L>
         <L label="Ancien prix"><input type="number" value={f.old_price || ""} onChange={(e) => set("old_price", e.target.value)} className={inp} /></L>
@@ -336,73 +358,66 @@ function CustomersPanel({ customers }) {
 
 function CategoriesPanel({ categories, onChanged }) {
   const [form, setForm] = useState(null);
-  const [subForm, setSubForm] = useState(null);
-  const [expanded, setExpanded] = useState(null);
-  const delCat = async (catId) => { if (!confirm("Supprimer cette catégorie et ses sous-catégories ?")) return; await api.delete(`/categories/${catId}`); onChanged(); toast.success("Supprimée"); };
-  const delSub = async (id) => { await api.delete(`/subcategories/${id}`); onChanged(); };
+  const [expanded, setExpanded] = useState({});
+  const toggle = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
+  const del = async (node) => {
+    if (!confirm(`Supprimer « ${node.label} » et toutes ses sous-catégories ?`)) return;
+    await api.delete(`/categories/${node.id}`); onChanged(); toast.success("Supprimée");
+  };
+  const addRoot = () => setForm({ label: "", image: "", order: 100, parent_id: null, level: 0 });
+  const addChild = (parent) => setForm({ label: "", image: "", order: 100, parent_id: parent.id, level: parent.level + 1 });
+  const edit = (node) => setForm({ id: node.id, label: node.label, image: node.image || "", order: node.order, parent_id: node.parent_id, level: node.level });
+
+  const rows = [];
+  const walk = (nodes) => (nodes || []).forEach((n) => { rows.push(n); if (expanded[n.id]) walk(n.children); });
+  walk(categories);
+
   return (
     <div>
-      <button onClick={() => setForm({ label: "", icon: "Tag", image: "", order: 100 })} data-testid="admin-add-category" className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-mint-600 text-white font-semibold text-sm mb-4"><Plus className="w-4 h-4" /> Ajouter une catégorie</button>
-      <div className="space-y-2">
-        {categories.map((c) => (
-          <div key={c.id} className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden" data-testid={`admin-cat-${c.id}`}>
-            <div className="flex items-center gap-3 p-4">
-              <button onClick={() => setExpanded(expanded === c.id ? null : c.id)} className="text-slate-400"><ChevronRight className={`w-4 h-4 transition-transform ${expanded === c.id ? "rotate-90" : ""}`} /></button>
-              {c.image && <img src={mediaUrl(c.image)} alt="" className="w-9 h-9 rounded-lg object-cover" />}
-              <span className="font-semibold flex-1">{c.label}</span>
-              <span className="text-xs text-slate-400">{c.subcategories?.length || 0} sous-cat.</span>
-              <button onClick={() => setForm({ id: c.cat_id, label: c.label, icon: c.icon, image: c.image, order: c.order })} className="text-slate-400 hover:text-mint-700"><Pencil className="w-4 h-4" /></button>
-              <button onClick={() => delCat(c.cat_id)} data-testid={`admin-del-cat-${c.id}`} className="text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+      <button onClick={addRoot} data-testid="admin-add-category" className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-mint-600 text-white font-semibold text-sm mb-4"><Plus className="w-4 h-4" /> Ajouter une catégorie principale</button>
+      <div className="space-y-1">
+        {rows.map((node) => {
+          const hasChildren = node.children && node.children.length > 0;
+          const pad = node.level === 0 ? "" : node.level === 1 ? "ml-5" : "ml-10";
+          return (
+            <div key={node.id} className={`${pad} flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200/80`} data-testid={`admin-cat-${node.id}`}>
+              {hasChildren ? (
+                <button onClick={() => toggle(node.id)} className="text-slate-400"><ChevronRight className={`w-4 h-4 transition-transform ${expanded[node.id] ? "rotate-90" : ""}`} /></button>
+              ) : <span className="w-4" />}
+              {node.image && <img src={mediaUrl(node.image)} alt="" className="w-9 h-9 rounded-lg object-cover" />}
+              <span className="font-semibold flex-1 text-sm">{node.label}</span>
+              <span className="text-[10px] font-mono-label px-2 py-0.5 rounded-full bg-mint-50 text-mint-700 hidden sm:inline">Niveau {node.level + 1}</span>
+              {node.level < 2 && (
+                <button onClick={() => addChild(node)} data-testid={`admin-add-child-${node.id}`} className="text-mint-600 hover:text-mint-800" title="Ajouter une sous-catégorie"><Plus className="w-4 h-4" /></button>
+              )}
+              <button onClick={() => edit(node)} className="text-slate-400 hover:text-mint-700"><Pencil className="w-4 h-4" /></button>
+              <button onClick={() => del(node)} data-testid={`admin-del-cat-${node.id}`} className="text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
             </div>
-            {expanded === c.id && (
-              <div className="border-t border-mint-50 bg-mint-50/30 p-4 space-y-2">
-                {(c.subcategories || []).map((s) => (
-                  <div key={s.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 text-sm">
-                    <span>{s.label}</span>
-                    <div><button onClick={() => setSubForm({ id: s.id, label: s.label, category: c.id })} className="text-slate-400 hover:text-mint-700 mr-2"><Pencil className="w-3.5 h-3.5" /></button><button onClick={() => delSub(s.id)} className="text-slate-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button></div>
-                  </div>
-                ))}
-                <button onClick={() => setSubForm({ label: "", category: c.id })} data-testid={`admin-add-sub-${c.id}`} className="flex items-center gap-1.5 text-mint-700 text-sm font-semibold"><Plus className="w-4 h-4" /> Ajouter une sous-catégorie</button>
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
       {form && <CategoryForm cat={form} onClose={() => setForm(null)} onSaved={() => { setForm(null); onChanged(); }} />}
-      {subForm && <SubcategoryForm sub={subForm} onClose={() => setSubForm(null)} onSaved={() => { setSubForm(null); onChanged(); }} />}
     </div>
   );
 }
 
 function CategoryForm({ cat, onClose, onSaved }) {
   const [f, setF] = useState(cat);
+  const titleLevel = ["catégorie principale", "sous-catégorie", "sous-sous-catégorie"][f.level] || "catégorie";
   const save = async () => {
     if (!f.label) { toast.error("Nom requis"); return; }
-    const payload = { label: f.label, icon: f.icon || "Tag", image: f.image || null, order: Number(f.order) || 100 };
-    try { if (f.id) await api.put(`/categories/${f.id}`, payload); else await api.post("/categories", payload); toast.success("Catégorie enregistrée"); onSaved(); }
-    catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    const payload = { label: f.label, icon: "Tag", image: f.image || null, order: Number(f.order) || 100, parent_id: f.parent_id || null };
+    try {
+      if (f.id) await api.put(`/categories/${f.id}`, payload); else await api.post("/categories", payload);
+      toast.success("Catégorie enregistrée"); onSaved();
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
   };
   return (
-    <Modal title={f.id ? "Modifier la catégorie" : "Nouvelle catégorie"} onClose={onClose}>
+    <Modal title={f.id ? `Modifier la ${titleLevel}` : `Nouvelle ${titleLevel}`} onClose={onClose}>
       <L label="Nom"><input value={f.label} onChange={(e) => setF({ ...f, label: e.target.value })} data-testid="cf-label" className={inp} /></L>
       <L label="Ordre d'affichage"><input type="number" value={f.order} onChange={(e) => setF({ ...f, order: e.target.value })} className={inp} /></L>
       <L label="Image"><ImageUpload value={f.image} onChange={(url) => setF({ ...f, image: url })} /></L>
       <button onClick={save} data-testid="cf-save" className="w-full py-3 rounded-full bg-mint-600 text-white font-semibold">Enregistrer</button>
-    </Modal>
-  );
-}
-
-function SubcategoryForm({ sub, onClose, onSaved }) {
-  const [f, setF] = useState(sub);
-  const save = async () => {
-    if (!f.label) { toast.error("Nom requis"); return; }
-    try { if (f.id) await api.put(`/subcategories/${f.id}`, { label: f.label, category: f.category }); else await api.post("/subcategories", { label: f.label, category: f.category }); toast.success("Sous-catégorie enregistrée"); onSaved(); }
-    catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
-  };
-  return (
-    <Modal title={f.id ? "Modifier la sous-catégorie" : "Nouvelle sous-catégorie"} onClose={onClose}>
-      <L label="Nom"><input value={f.label} onChange={(e) => setF({ ...f, label: e.target.value })} data-testid="sf-label" className={inp} /></L>
-      <button onClick={save} data-testid="sf-save" className="w-full py-3 rounded-full bg-mint-600 text-white font-semibold">Enregistrer</button>
     </Modal>
   );
 }

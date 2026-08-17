@@ -180,7 +180,8 @@ class Address(BaseModel):
 class ProductInput(BaseModel):
     name: str
     brand: str = ""
-    category: str
+    category: str = ""
+    category_id: Optional[str] = None
     subcategory: Optional[str] = None
     description: str = ""
     price: float
@@ -237,12 +238,8 @@ class CategoryInput(BaseModel):
     label: str
     icon: str = "Tag"
     image: Optional[str] = None
+    parent_id: Optional[str] = None
     order: int = 100
-
-
-class SubcategoryInput(BaseModel):
-    label: str
-    category: str  # parent category slug
 
 
 class PromoInput(BaseModel):
@@ -423,6 +420,7 @@ async def delete_address(addr_id: str, user: dict = Depends(get_current_user)):
 @api.get("/products")
 async def list_products(
     category: Optional[str] = None,
+    category_id: Optional[str] = None,
     subcategory: Optional[str] = None,
     brand: Optional[str] = None,
     search: Optional[str] = None,
@@ -438,6 +436,8 @@ async def list_products(
     q = {}
     if category:
         q["category"] = category
+    if category_id:
+        q["category_id"] = category_id
     if subcategory:
         q["subcategory"] = subcategory
     if brand:
@@ -521,99 +521,105 @@ async def delete_product(product_id: str, admin: dict = Depends(get_admin_user))
 
 
 # ----------------------------------------------------------------------------
-# Categories
+# Categories (3-level tree)
 # ----------------------------------------------------------------------------
-CATEGORIES = [
-    {"id": "sante", "label": "Santé", "icon": "HeartPulse"},
-    {"id": "visage", "label": "Visage", "icon": "Sparkles"},
-    {"id": "corps", "label": "Corps", "icon": "UserCheck"},
-    {"id": "cheveux", "label": "Cheveux", "icon": "Scissors"},
-    {"id": "hygiene", "label": "Hygiène", "icon": "ShieldCheck"},
-    {"id": "bebe-maman", "label": "Bébé & Maman", "icon": "Baby"},
-    {"id": "solaire", "label": "Solaire", "icon": "Sun"},
-    {"id": "homme-sport", "label": "Homme & Sport", "icon": "Dumbbell"},
-    {"id": "complements", "label": "Compléments alimentaires", "icon": "Pill"},
-    {"id": "minceur", "label": "Minceur", "icon": "Activity"},
-    {"id": "nature-bio", "label": "Nature & Bio", "icon": "Leaf"},
-    {"id": "animaux", "label": "Animaux", "icon": "PawPrint"},
-    {"id": "materiel-medical", "label": "Matériel Médical", "icon": "Stethoscope"},
-]
+MAX_LEVEL = 2  # 3 levels: 0 (main) -> 1 (sub) -> 2 (sub-sub)
+
+
+def _cat_public(doc):
+    return {
+        "id": str(doc["_id"]),
+        "slug": doc.get("slug"),
+        "label": doc["label"],
+        "image": doc.get("image"),
+        "icon": doc.get("icon", "Tag"),
+        "order": doc.get("order", 100),
+        "level": doc.get("level", 0),
+        "parent_id": doc.get("parent_id"),
+    }
+
+
+def _build_tree(docs, parent_id=None):
+    nodes = [d for d in docs if d.get("parent_id") == parent_id]
+    nodes.sort(key=lambda d: (d.get("order", 100), d.get("label", "")))
+    result = []
+    for d in nodes:
+        node = _cat_public(d)
+        node["children"] = _build_tree(docs, str(d["_id"]))
+        result.append(node)
+    return result
 
 
 @api.get("/categories")
 async def get_categories():
-    cats = await db.categories.find().sort("order", 1).to_list(200)
-    if not cats:
-        return [{"id": c["id"], "slug": c["id"], **c} for c in CATEGORIES]
-    result = []
-    for c in cats:
-        subs = await db.subcategories.find({"category": c["slug"]}).sort("label", 1).to_list(100)
-        result.append({
-            "id": c["slug"], "slug": c["slug"], "label": c["label"],
-            "icon": c.get("icon", "Tag"), "image": c.get("image"),
-            "order": c.get("order", 100),
-            "cat_id": str(c["_id"]),
-            "subcategories": [{"id": str(s["_id"]), "label": s["label"], "slug": s["slug"]} for s in subs],
-        })
-    return result
+    docs = await db.categories.find().to_list(2000)
+    return _build_tree(docs, None)
+
+
+@api.get("/categories/{cat_id}")
+async def get_category(cat_id: str):
+    if not ObjectId.is_valid(cat_id):
+        raise HTTPException(status_code=404, detail="Catégorie introuvable")
+    doc = await db.categories.find_one({"_id": ObjectId(cat_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Catégorie introuvable")
+    ancestors = []
+    p = doc.get("parent_id")
+    while p and ObjectId.is_valid(p):
+        pa = await db.categories.find_one({"_id": ObjectId(p)})
+        if not pa:
+            break
+        ancestors.insert(0, _cat_public(pa))
+        p = pa.get("parent_id")
+    all_docs = await db.categories.find().to_list(2000)
+    children = _build_tree(all_docs, str(doc["_id"]))
+    return {"category": _cat_public(doc), "ancestors": ancestors, "children": children}
 
 
 @api.post("/categories")
 async def create_category(data: CategoryInput, admin: dict = Depends(get_admin_user)):
+    level = 0
+    if data.parent_id:
+        if not ObjectId.is_valid(data.parent_id):
+            raise HTTPException(status_code=400, detail="Parent invalide")
+        parent = await db.categories.find_one({"_id": ObjectId(data.parent_id)})
+        if not parent:
+            raise HTTPException(status_code=404, detail="Catégorie parente introuvable")
+        level = parent.get("level", 0) + 1
+        if level > MAX_LEVEL:
+            raise HTTPException(status_code=400, detail="Profondeur maximale de 3 niveaux atteinte")
     slug = slugify(data.label)
     if await db.categories.find_one({"slug": slug}):
         slug = f"{slug}-{uuid.uuid4().hex[:4]}"
-    doc = {"slug": slug, "label": data.label, "icon": data.icon, "image": data.image, "order": data.order,
+    doc = {"slug": slug, "label": data.label, "icon": data.icon, "image": data.image,
+           "parent_id": data.parent_id, "level": level, "order": data.order,
            "created_at": now_utc().isoformat()}
     res = await db.categories.insert_one(doc)
     doc["_id"] = res.inserted_id
-    return clean(doc)
+    return _cat_public(doc)
 
 
 @api.put("/categories/{cat_id}")
 async def update_category(cat_id: str, data: CategoryInput, admin: dict = Depends(get_admin_user)):
-    await db.categories.update_one({"_id": ObjectId(cat_id)},
-                                   {"$set": {"label": data.label, "icon": data.icon, "image": data.image, "order": data.order}})
+    await db.categories.update_one(
+        {"_id": ObjectId(cat_id)},
+        {"$set": {"label": data.label, "icon": data.icon, "image": data.image, "order": data.order}})
     doc = await db.categories.find_one({"_id": ObjectId(cat_id)})
-    return clean(doc)
+    return _cat_public(doc)
 
 
 @api.delete("/categories/{cat_id}")
 async def delete_category(cat_id: str, admin: dict = Depends(get_admin_user)):
-    doc = await db.categories.find_one({"_id": ObjectId(cat_id)})
-    if doc:
-        await db.subcategories.delete_many({"category": doc["slug"]})
-    await db.categories.delete_one({"_id": ObjectId(cat_id)})
-    return {"ok": True}
-
-
-# Subcategories
-@api.get("/subcategories")
-async def list_subcategories(category: Optional[str] = None):
-    q = {"category": category} if category else {}
-    return [clean(d) for d in await db.subcategories.find(q).sort("label", 1).to_list(300)]
-
-
-@api.post("/subcategories")
-async def create_subcategory(data: SubcategoryInput, admin: dict = Depends(get_admin_user)):
-    doc = {"label": data.label, "category": data.category, "slug": slugify(data.label),
-           "created_at": now_utc().isoformat()}
-    res = await db.subcategories.insert_one(doc)
-    doc["_id"] = res.inserted_id
-    return clean(doc)
-
-
-@api.put("/subcategories/{sub_id}")
-async def update_subcategory(sub_id: str, data: SubcategoryInput, admin: dict = Depends(get_admin_user)):
-    await db.subcategories.update_one({"_id": ObjectId(sub_id)},
-                                      {"$set": {"label": data.label, "category": data.category, "slug": slugify(data.label)}})
-    doc = await db.subcategories.find_one({"_id": ObjectId(sub_id)})
-    return clean(doc)
-
-
-@api.delete("/subcategories/{sub_id}")
-async def delete_subcategory(sub_id: str, admin: dict = Depends(get_admin_user)):
-    await db.subcategories.delete_one({"_id": ObjectId(sub_id)})
+    to_delete = [cat_id]
+    frontier = [cat_id]
+    while frontier:
+        children = await db.categories.find({"parent_id": {"$in": frontier}}).to_list(2000)
+        ids = [str(c["_id"]) for c in children]
+        to_delete.extend(ids)
+        frontier = ids
+    obj_ids = [ObjectId(i) for i in to_delete if ObjectId.is_valid(i)]
+    await db.categories.delete_many({"_id": {"$in": obj_ids}})
+    await db.products.update_many({"category_id": {"$in": to_delete}}, {"$set": {"category_id": None}})
     return {"ok": True}
 
 
@@ -1115,31 +1121,150 @@ DEFAULT_SETTINGS = {
 
 
 CATEGORY_IMAGES_SEED = {
-    "sante": "https://images.unsplash.com/photo-1607619056574-7b8d3ee536b2?w=500",
-    "visage": "https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=500",
-    "corps": "https://images.unsplash.com/photo-1612817288484-6f916006741a?w=500",
-    "cheveux": "https://images.unsplash.com/photo-1522337660859-02fbefca4702?w=500",
-    "hygiene": "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=500",
-    "bebe-maman": "https://images.unsplash.com/photo-1778276551433-75420636007d?w=500",
-    "solaire": "https://images.unsplash.com/photo-1556228841-a3c527ebefe5?w=500",
-    "homme-sport": "https://images.unsplash.com/photo-1669322779651-5ca89652492e?w=500",
-    "complements": "https://images.unsplash.com/photo-1664956618021-73c47736845e?w=500",
-    "minceur": "https://images.unsplash.com/photo-1523901839036-a3030662f220?w=500",
-    "nature-bio": "https://images.unsplash.com/photo-1760108249194-f9cafd970762?w=500",
-    "animaux": "https://images.unsplash.com/photo-1571873735645-1ae72b963024?w=500",
-    "materiel-medical": "https://images.unsplash.com/photo-1700832082200-af7deeb63d9b?w=500",
+    "sante": "https://images.unsplash.com/photo-1607619056574-7b8d3ee536b2?w=600",
+    "visage": "https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=600",
+    "corps": "https://images.unsplash.com/photo-1612817288484-6f916006741a?w=600",
+    "cheveux": "https://images.unsplash.com/photo-1522337660859-02fbefca4702?w=600",
+    "hygiene": "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600",
+    "bebe-maman": "https://images.unsplash.com/photo-1778276551433-75420636007d?w=600",
+    "solaire": "https://images.unsplash.com/photo-1556228841-a3c527ebefe5?w=600",
+    "homme-sport": "https://images.unsplash.com/photo-1669322779651-5ca89652492e?w=600",
+    "complements": "https://images.unsplash.com/photo-1664956618021-73c47736845e?w=600",
+    "minceur": "https://images.unsplash.com/photo-1523901839036-a3030662f220?w=600",
+    "nature-bio": "https://images.unsplash.com/photo-1760108249194-f9cafd970762?w=600",
+    "animaux": "https://images.unsplash.com/photo-1571873735645-1ae72b963024?w=600",
+    "materiel-medical": "https://images.unsplash.com/photo-1700832082200-af7deeb63d9b?w=600",
 }
 
 
-async def ensure_categories():
-    if await db.categories.count_documents({}) > 0:
+# Pool of images cycled for sub / sub-sub categories and demo products
+CAT_IMG_POOL = [
+    "https://images.unsplash.com/photo-1613803745799-ba6c10aace85?w=600",
+    "https://images.unsplash.com/photo-1680536977794-7954fc45afa1?w=600",
+    "https://images.unsplash.com/photo-1585652757141-8837d676fac8?w=600",
+    "https://images.unsplash.com/photo-1689414748960-0498d6675f20?w=600",
+    "https://images.unsplash.com/photo-1612817288484-6f916006741a?w=600",
+    "https://images.unsplash.com/photo-1680537530357-f158c9d6f2ae?w=600",
+    "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600",
+    "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?w=600",
+    "https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=600",
+    "https://images.unsplash.com/photo-1631729371254-42c2892f0e6e?w=600",
+    "https://images.unsplash.com/photo-1586495777744-4413f21062fa?w=600",
+    "https://images.unsplash.com/photo-1626784215021-2e39ccf971cd?w=600",
+]
+
+
+# Example 3-level catalog tree: main -> (sub -> [sub-sub leaves])
+CATEGORY_TREE_SEED = [
+    ("Santé", CATEGORY_IMAGES_SEED["sante"], [
+        ("Douleur & Fièvre", ["Antalgiques", "Patchs chauffants"]),
+        ("Digestion", ["Anti-acides", "Probiotiques"]),
+    ]),
+    ("Visage", CATEGORY_IMAGES_SEED["visage"], [
+        ("Soins Hydratants", ["Crèmes de jour", "Sérums hydratants"]),
+        ("Anti-Âge", ["Crèmes anti-rides", "Contours des yeux"]),
+    ]),
+    ("Corps", CATEGORY_IMAGES_SEED["corps"], [
+        ("Hydratation Corps", ["Laits corporels", "Beurres nourrissants"]),
+        ("Mains & Pieds", ["Crèmes mains", "Soins des pieds"]),
+    ]),
+    ("Cheveux", CATEGORY_IMAGES_SEED["cheveux"], [
+        ("Shampooings", ["Anti-chute", "Antipelliculaire"]),
+        ("Soins Capillaires", ["Masques capillaires", "Huiles capillaires"]),
+    ]),
+    ("Hygiène", CATEGORY_IMAGES_SEED["hygiene"], [
+        ("Hygiène Corporelle", ["Gels douche", "Savons doux"]),
+        ("Bucco-dentaire", ["Dentifrices", "Bains de bouche"]),
+    ]),
+    ("Bébé & Maman", CATEGORY_IMAGES_SEED["bebe-maman"], [
+        ("Soins Bébé", ["Change & érythème", "Nettoyants doux"]),
+        ("Maternité", ["Anti-vergetures", "Allaitement"]),
+    ]),
+    ("Solaire", CATEGORY_IMAGES_SEED["solaire"], [
+        ("Protection Solaire", ["Visage SPF50+", "Corps SPF30"]),
+        ("Après-Soleil", ["Laits apaisants", "Autobronzants"]),
+    ]),
+    ("Homme & Sport", CATEGORY_IMAGES_SEED["homme-sport"], [
+        ("Soin Homme", ["Rasage", "Soins visage homme"]),
+        ("Nutrition Sport", ["Protéines", "Récupération"]),
+    ]),
+    ("Compléments alimentaires", CATEGORY_IMAGES_SEED["complements"], [
+        ("Vitamines", ["Vitamine C", "Vitamine D"]),
+        ("Minéraux", ["Magnésium", "Fer"]),
+    ]),
+    ("Minceur", CATEGORY_IMAGES_SEED["minceur"], [
+        ("Brûleurs & Détox", ["Brûle-graisses", "Draineurs"]),
+        ("Coupe-faim", ["Fibres", "Substituts de repas"]),
+    ]),
+    ("Nature & Bio", CATEGORY_IMAGES_SEED["nature-bio"], [
+        ("Cosmétique Bio", ["Huiles végétales", "Soins certifiés bio"]),
+        ("Phytothérapie", ["Tisanes", "Huiles essentielles"]),
+    ]),
+    ("Animaux", CATEGORY_IMAGES_SEED["animaux"], [
+        ("Chien", ["Antiparasitaires chien", "Hygiène chien"]),
+        ("Chat", ["Antiparasitaires chat", "Hygiène chat"]),
+    ]),
+    ("Matériel Médical", CATEGORY_IMAGES_SEED["materiel-medical"], [
+        ("Mesure & Diagnostic", ["Tensiomètres", "Thermomètres"]),
+        ("Orthopédie", ["Attelles", "Bandages"]),
+    ]),
+]
+
+
+async def ensure_category_tree():
+    """One-time migration to the 3-level category tree + demo products."""
+    if await db.meta.find_one({"_id": "cat_tree_v1"}):
         return
-    for i, c in enumerate(CATEGORIES):
-        await db.categories.insert_one({
-            "slug": c["id"], "label": c["label"], "icon": c["icon"],
-            "image": CATEGORY_IMAGES_SEED.get(c["id"]), "order": i,
+    await db.categories.delete_many({})
+    await db.subcategories.delete_many({})
+    await db.products.delete_many({})
+
+    brand_names = await db.brands.distinct("name") or ["Pharma360"]
+    counter = {"img": 0, "prod": 0}
+
+    async def insert_node(label, image, parent_id, level, order):
+        slug = slugify(label)
+        if await db.categories.find_one({"slug": slug}):
+            slug = f"{slug}-{uuid.uuid4().hex[:4]}"
+        res = await db.categories.insert_one({
+            "slug": slug, "label": label, "image": image, "icon": "Tag",
+            "parent_id": parent_id, "level": level, "order": order,
             "created_at": now_utc().isoformat(),
         })
+        return str(res.inserted_id), slug
+
+    async def seed_leaf_products(leaf_id, leaf_slug, leaf_label):
+        variants = ["Essentiel", "Advanced"]
+        for k in range(2):
+            i = counter["prod"]
+            brand = brand_names[i % len(brand_names)]
+            image = CAT_IMG_POOL[i % len(CAT_IMG_POOL)]
+            base = 1500 + (i % 8) * 350
+            promo = i % 3 == 0
+            await db.products.insert_one({
+                "name": f"{brand} {leaf_label} {variants[k]}",
+                "brand": brand, "category": leaf_slug, "category_id": leaf_id, "subcategory": None,
+                "description": f"{leaf_label} — {brand}. Produit de parapharmacie 100% original, disponible chez Pharma360.",
+                "price": base, "old_price": base + 500 if promo else None,
+                "stock": 30, "images": [image],
+                "badge": "PROMO" if promo else None,
+                "is_featured": i % 5 == 0, "is_new": i % 4 == 0, "need": None,
+                "created_at": now_utc().isoformat(),
+            })
+            counter["prod"] += 1
+
+    for mi, (main_label, main_img, subs) in enumerate(CATEGORY_TREE_SEED):
+        main_id, _ = await insert_node(main_label, main_img, None, 0, mi)
+        for si, (sub_label, leaves) in enumerate(subs):
+            sub_img = CAT_IMG_POOL[counter["img"] % len(CAT_IMG_POOL)]; counter["img"] += 1
+            sub_id, _ = await insert_node(sub_label, sub_img, main_id, 1, si)
+            for li, leaf_label in enumerate(leaves):
+                leaf_img = CAT_IMG_POOL[counter["img"] % len(CAT_IMG_POOL)]; counter["img"] += 1
+                leaf_id, leaf_slug = await insert_node(leaf_label, leaf_img, sub_id, 2, li)
+                await seed_leaf_products(leaf_id, leaf_slug, leaf_label)
+
+    await db.meta.insert_one({"_id": "cat_tree_v1", "created_at": now_utc().isoformat()})
+    logger.info("Category tree + demo products seeded")
 
 
 async def ensure_settings():
@@ -1230,7 +1355,7 @@ async def startup():
         logger.error(f"Storage init failed: {e}")
     await seed()
     await ensure_settings()
-    await ensure_categories()
+    await ensure_category_tree()
 
 
 @app.on_event("shutdown")

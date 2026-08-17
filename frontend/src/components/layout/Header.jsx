@@ -94,6 +94,7 @@ export default function Header() {
   const { settings } = useSettings();
   const { categories } = useCategories();
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [openMain, setOpenMain] = useState(null);
   const [openSub, setOpenSub] = useState(null);
 
   return (
@@ -133,7 +134,7 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Category nav (desktop/tablet) */}
+      {/* Category nav (desktop/tablet) — 3-level dropdowns */}
       <nav className="hidden md:block border-t border-mint-50 bg-mint-50/40" data-testid="category-nav">
         <div className="max-w-7xl mx-auto px-6 flex flex-wrap items-center gap-x-0.5 gap-y-1 py-2">
           {categories.map((c) => (
@@ -142,12 +143,27 @@ export default function Header() {
                 className="px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 rounded-lg hover:bg-white transition-colors whitespace-nowrap inline-block">
                 {c.label}
               </Link>
-              {c.subcategories && c.subcategories.length > 0 && (
+              {c.children && c.children.length > 0 && (
                 <div className="absolute left-0 top-full z-[70] hidden group-hover:block pt-1">
-                  <div className="bg-white rounded-xl shadow-xl border border-mint-100 py-2 min-w-[190px]">
-                    {c.subcategories.map((s) => (
-                      <Link key={s.id} to={`/categorie/${c.id}?subcategory=${encodeURIComponent(s.slug)}`}
-                        className="block px-4 py-2 text-sm text-slate-600 hover:bg-mint-50 hover:text-mint-700 whitespace-nowrap">{s.label}</Link>
+                  <div className="bg-white rounded-xl shadow-xl border border-mint-100 py-2 min-w-[220px]">
+                    {c.children.map((s) => (
+                      <div key={s.id} className="relative group/sub">
+                        <Link to={`/categorie/${s.id}`} data-testid={`category-nav-sub-${s.id}`}
+                          className="flex items-center justify-between gap-2 px-4 py-2 text-sm text-slate-600 hover:bg-mint-50 hover:text-mint-700 whitespace-nowrap">
+                          {s.label}
+                          {s.children && s.children.length > 0 && <ChevronRight className="w-3.5 h-3.5 text-slate-300" />}
+                        </Link>
+                        {s.children && s.children.length > 0 && (
+                          <div className="absolute left-full top-0 z-[80] hidden group-hover/sub:block pl-1">
+                            <div className="bg-white rounded-xl shadow-xl border border-mint-100 py-2 min-w-[210px]">
+                              {s.children.map((ss) => (
+                                <Link key={ss.id} to={`/categorie/${ss.id}`} data-testid={`category-nav-leaf-${ss.id}`}
+                                  className="block px-4 py-2 text-sm text-slate-600 hover:bg-mint-50 hover:text-mint-700 whitespace-nowrap">{ss.label}</Link>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -175,15 +191,28 @@ export default function Header() {
                   <div className="flex items-center">
                     <Link to={`/categorie/${c.id}`} onClick={() => setMobileMenu(false)}
                       className="flex-1 px-3 py-2.5 rounded-lg hover:bg-mint-50 font-medium text-slate-700">{c.label}</Link>
-                    {c.subcategories && c.subcategories.length > 0 && (
-                      <button onClick={() => setOpenSub(openSub === c.id ? null : c.id)} className="p-2 text-slate-400" data-testid={`mobile-sub-toggle-${c.id}`}>
-                        <ChevronRight className={`w-4 h-4 transition-transform ${openSub === c.id ? "rotate-90" : ""}`} />
+                    {c.children && c.children.length > 0 && (
+                      <button onClick={() => setOpenMain(openMain === c.id ? null : c.id)} className="p-2 text-slate-400" data-testid={`mobile-main-toggle-${c.id}`}>
+                        <ChevronRight className={`w-4 h-4 transition-transform ${openMain === c.id ? "rotate-90" : ""}`} />
                       </button>
                     )}
                   </div>
-                  {openSub === c.id && c.subcategories?.map((s) => (
-                    <Link key={s.id} to={`/categorie/${c.id}?subcategory=${encodeURIComponent(s.slug)}`} onClick={() => setMobileMenu(false)}
-                      className="block pl-7 pr-3 py-2 rounded-lg hover:bg-mint-50 text-sm text-slate-500">{s.label}</Link>
+                  {openMain === c.id && c.children?.map((s) => (
+                    <div key={s.id}>
+                      <div className="flex items-center">
+                        <Link to={`/categorie/${s.id}`} onClick={() => setMobileMenu(false)}
+                          className="flex-1 pl-7 pr-3 py-2 rounded-lg hover:bg-mint-50 text-sm text-slate-600 font-medium">{s.label}</Link>
+                        {s.children && s.children.length > 0 && (
+                          <button onClick={() => setOpenSub(openSub === s.id ? null : s.id)} className="p-2 text-slate-400" data-testid={`mobile-sub-toggle-${s.id}`}>
+                            <ChevronRight className={`w-4 h-4 transition-transform ${openSub === s.id ? "rotate-90" : ""}`} />
+                          </button>
+                        )}
+                      </div>
+                      {openSub === s.id && s.children?.map((ss) => (
+                        <Link key={ss.id} to={`/categorie/${ss.id}`} onClick={() => setMobileMenu(false)}
+                          className="block pl-11 pr-3 py-2 rounded-lg hover:bg-mint-50 text-sm text-slate-500">{ss.label}</Link>
+                      ))}
+                    </div>
                   ))}
                 </div>
               ))}
