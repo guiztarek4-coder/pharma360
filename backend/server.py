@@ -1,5 +1,6 @@
 import os
 import uuid
+import secrets
 import jwt
 import bcrypt
 import asyncio
@@ -224,11 +225,35 @@ class OrderInput(BaseModel):
     email: Optional[str] = None
     wilaya: str
     commune: str = ""
+    agency: str = ""
     street: str = ""
-    payment_method: str  # "cod" | "card"
+    payment_method: str  # "cod" | "baridimob" | "card"
     delivery_method: str = "domicile"  # "pickup" | "domicile" | "relais"
     promo_code: str = ""
     notes: str = ""
+
+
+class WilayaFee(BaseModel):
+    name: str
+    fee: float = 0
+
+
+class WilayaInput(BaseModel):
+    name: str
+    code: str = ""
+    base_fee: float = 0
+    cities: List[WilayaFee] = []
+    agencies: List[WilayaFee] = []
+    order: int = 100
+
+
+class ForgotPasswordInput(BaseModel):
+    email: str
+
+
+class ResetPasswordInput(BaseModel):
+    token: str
+    password: str
 
 
 class ProductInputExtra(BaseModel):
@@ -397,6 +422,66 @@ async def logout(response: Response):
 @api.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
     return clean(user)
+
+
+def send_reset_email(to: str, link: str, sender: str = None):
+    api_key = os.environ.get("RESEND_API_KEY")
+    if not api_key:
+        logger.warning("RESEND_API_KEY missing; reset link: %s", link)
+        return
+    try:
+        import resend
+        resend.api_key = api_key
+        sender = sender or os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px;color:#0f172a">
+          <h2 style="color:#059669">Réinitialisation de votre mot de passe</h2>
+          <p>Vous avez demandé à réinitialiser votre mot de passe Pharma360. Cliquez sur le bouton ci-dessous (lien valable 1 heure) :</p>
+          <p style="text-align:center;margin:28px 0">
+            <a href="{link}" style="background:#059669;color:#fff;padding:12px 28px;border-radius:9999px;text-decoration:none;font-weight:bold">Créer un nouveau mot de passe</a>
+          </p>
+          <p style="font-size:12px;color:#64748b">Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>
+        </div>"""
+        resend.Emails.send({"from": sender, "to": [to], "subject": "Réinitialisation de votre mot de passe - Pharma360", "html": html})
+    except Exception as e:
+        logger.error("send_reset_email failed: %s", e)
+
+
+@api.post("/auth/forgot-password")
+async def forgot_password(data: ForgotPasswordInput, request: Request):
+    email = data.email.lower().strip()
+    user = await db.users.find_one({"email": email})
+    if user:
+        token = secrets.token_urlsafe(32)
+        await db.password_reset_tokens.insert_one({
+            "token": token, "user_id": str(user["_id"]),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
+            "used": False, "created_at": now_utc().isoformat(),
+        })
+        origin = request.headers.get("origin") or os.environ.get("PUBLIC_URL", "")
+        link = f"{origin}/reset-password?token={token}"
+        s = await db.settings.find_one({"_id": "site"}) or {}
+        sender = s.get("sender_email") or os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+        send_reset_email(email, link, sender)
+    # Never reveal whether the email exists
+    return {"ok": True, "message": "Si un compte existe pour cet email, un lien de réinitialisation a été envoyé."}
+
+
+@api.post("/auth/reset-password")
+async def reset_password(data: ResetPasswordInput):
+    if len(data.password) < 6:
+        raise HTTPException(status_code=400, detail="Le mot de passe doit contenir au moins 6 caractères")
+    doc = await db.password_reset_tokens.find_one({"token": data.token})
+    if not doc or doc.get("used"):
+        raise HTTPException(status_code=400, detail="Lien invalide ou déjà utilisé")
+    expires = doc.get("expires_at")
+    if expires and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if expires and expires < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Ce lien a expiré, veuillez refaire une demande")
+    await db.users.update_one({"_id": ObjectId(doc["user_id"])}, {"$set": {"password_hash": hash_password(data.password)}})
+    await db.password_reset_tokens.update_one({"_id": doc["_id"]}, {"$set": {"used": True}})
+    return {"ok": True, "message": "Mot de passe réinitialisé avec succès"}
 
 
 # ----------------------------------------------------------------------------
@@ -1045,14 +1130,73 @@ def compute_subtotal(items):
     return sum(i.price * i.quantity for i in items)
 
 
-async def compute_delivery(method: str, wilaya: str, subtotal: float) -> float:
+async def compute_delivery(method: str, wilaya: str, commune: str, agency: str, subtotal: float) -> float:
     if subtotal <= 0 or method == "pickup":
         return 0
     s = await db.settings.find_one({"_id": "site"}) or {}
-    fees = s.get("delivery_fees") or {}
+    w = await db.wilayas.find_one({"name": wilaya})
     if method == "relais":
+        if w:
+            match = next((a for a in (w.get("agencies") or []) if a.get("name") == agency), None)
+            if match:
+                return float(match.get("fee", 0))
         return float(s.get("relais_fee", 350))
+    # domicile = wilaya base fee + city fee
+    if w:
+        base = float(w.get("base_fee", s.get("delivery_fee", WILAYA_DELIVERY)))
+        city = next((c for c in (w.get("cities") or []) if c.get("name") == commune), None)
+        return base + (float(city.get("fee", 0)) if city else 0)
+    fees = s.get("delivery_fees") or {}
     return float(fees.get(wilaya, s.get("delivery_fee", WILAYA_DELIVERY)))
+
+
+# ----------------------------------------------------------------------------
+# Delivery zones (wilayas -> cities / relay agencies) — admin managed
+# ----------------------------------------------------------------------------
+def _wilaya_public(doc):
+    return {
+        "id": str(doc["_id"]),
+        "name": doc["name"],
+        "code": doc.get("code", ""),
+        "base_fee": doc.get("base_fee", 0),
+        "cities": doc.get("cities", []),
+        "agencies": doc.get("agencies", []),
+        "order": doc.get("order", 100),
+    }
+
+
+@api.get("/delivery/wilayas")
+async def list_wilayas():
+    docs = await db.wilayas.find().sort([("order", 1), ("name", 1)]).to_list(200)
+    return [_wilaya_public(d) for d in docs]
+
+
+@api.post("/admin/wilayas")
+async def create_wilaya(data: WilayaInput, admin: dict = Depends(get_admin_user)):
+    doc = {"name": data.name, "code": data.code, "base_fee": data.base_fee,
+           "cities": [c.model_dump() for c in data.cities],
+           "agencies": [a.model_dump() for a in data.agencies],
+           "order": data.order, "created_at": now_utc().isoformat()}
+    res = await db.wilayas.insert_one(doc)
+    doc["_id"] = res.inserted_id
+    return _wilaya_public(doc)
+
+
+@api.put("/admin/wilayas/{wid}")
+async def update_wilaya(wid: str, data: WilayaInput, admin: dict = Depends(get_admin_user)):
+    await db.wilayas.update_one({"_id": ObjectId(wid)}, {"$set": {
+        "name": data.name, "code": data.code, "base_fee": data.base_fee,
+        "cities": [c.model_dump() for c in data.cities],
+        "agencies": [a.model_dump() for a in data.agencies], "order": data.order}})
+    doc = await db.wilayas.find_one({"_id": ObjectId(wid)})
+    return _wilaya_public(doc)
+
+
+@api.delete("/admin/wilayas/{wid}")
+async def delete_wilaya(wid: str, admin: dict = Depends(get_admin_user)):
+    await db.wilayas.delete_one({"_id": ObjectId(wid)})
+    return {"ok": True}
+
 
 
 async def apply_promo(code: str, subtotal: float) -> float:
@@ -1082,7 +1226,7 @@ async def create_order(data: OrderInput, request: Request):
     if not data.items:
         raise HTTPException(status_code=400, detail="Le panier est vide")
     subtotal = compute_subtotal(data.items)
-    delivery = await compute_delivery(data.delivery_method, data.wilaya, subtotal)
+    delivery = await compute_delivery(data.delivery_method, data.wilaya, data.commune, data.agency, subtotal)
     discount = await apply_promo(data.promo_code, subtotal)
     total = max(0, subtotal + delivery - discount)
     user = None
@@ -1102,6 +1246,7 @@ async def create_order(data: OrderInput, request: Request):
         "email": (data.email or "").strip().lower() or None,
         "wilaya": data.wilaya,
         "commune": data.commune,
+        "agency": data.agency,
         "street": data.street,
         "payment_method": data.payment_method,
         "delivery_method": data.delivery_method,
@@ -1375,6 +1520,7 @@ DEFAULT_SETTINGS = {
     "payment_baridimob_enabled": True,
     "whatsapp_number": "+213500000000",
     "maps_link": "",
+    "virtual_tour_url": "",
     "privacy_content": "Chez Pharma360, la protection de vos données personnelles est une priorité. Cette politique explique comment nous collectons et utilisons vos informations.\n\nDonnées collectées\nNous collectons les informations que vous nous fournissez lors de la création de compte et de vos commandes : nom, prénom, email, téléphone et adresse de livraison.\n\nUtilisation\nVos données servent uniquement à traiter vos commandes, assurer la livraison et améliorer votre expérience. Elles ne sont jamais revendues à des tiers.\n\nVos droits\nVous pouvez à tout moment demander la modification ou la suppression de vos données en nous contactant.",
     "cgv_content": "Les présentes Conditions Générales de Vente régissent les ventes réalisées sur Pharma360.\n\nProduits\nTous nos produits sont 100% originaux et proviennent de laboratoires certifiés. Les photos sont non contractuelles.\n\nPrix & Paiement\nLes prix sont affichés en Dinar Algérien (DA), toutes taxes comprises. Le paiement s'effectue à la livraison (espèces) ou via BaridiMob.\n\nLivraison\nLa livraison est assurée dans les 58 wilayas d'Algérie sous 24 à 48h. Des frais de livraison s'appliquent selon la wilaya.\n\nRetours\nLes produits peuvent être retournés sous 7 jours s'ils sont non ouverts et dans leur emballage d'origine.",
     "hero_image": None,
@@ -1535,6 +1681,28 @@ async def ensure_category_tree():
     logger.info("Category tree + demo products seeded")
 
 
+async def ensure_wilayas():
+    if await db.meta.find_one({"_id": "wilayas_v1"}):
+        return
+    from wilayas_data import WILAYAS_SEED
+    await db.wilayas.delete_many({})
+    for i, (code, name, communes) in enumerate(WILAYAS_SEED):
+        await db.wilayas.insert_one({
+            "name": name,
+            "code": code,
+            "base_fee": 400,
+            "cities": [{"name": c, "fee": 0} for c in communes],
+            "agencies": [
+                {"name": f"Yalidine {name}", "fee": 350},
+                {"name": f"ZR Express {name}", "fee": 300},
+            ],
+            "order": i,
+            "created_at": now_utc().isoformat(),
+        })
+    await db.meta.insert_one({"_id": "wilayas_v1", "created_at": now_utc().isoformat()})
+    logger.info("Wilayas delivery zones seeded")
+
+
 async def ensure_settings():
     existing = await db.settings.find_one({"_id": "site"})
     if not existing:
@@ -1629,6 +1797,12 @@ async def startup():
     await seed()
     await ensure_settings()
     await ensure_category_tree()
+    await ensure_wilayas()
+    try:
+        await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
+        await db.password_reset_tokens.create_index("token")
+    except Exception as e:
+        logger.error(f"reset token index failed: {e}")
 
 
 @app.on_event("shutdown")

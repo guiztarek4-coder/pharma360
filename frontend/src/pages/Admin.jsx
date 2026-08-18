@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { LayoutDashboard, Package, ShoppingBag, Tag, FileText, LogOut, Plus, Pencil, Trash2, X, Upload, TrendingUp, Users, Leaf, Settings, FolderTree, Ticket, Bell, Image as ImageIcon, UserCog, ChevronRight, GripVertical, Download, FileSpreadsheet, AlertCircle, AlertTriangle } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Tag, FileText, LogOut, Plus, Pencil, Trash2, X, Upload, TrendingUp, Users, Leaf, Settings, FolderTree, Ticket, Bell, Image as ImageIcon, UserCog, ChevronRight, GripVertical, Download, FileSpreadsheet, AlertCircle, AlertTriangle, Truck, MapPin, Compass } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -240,6 +240,7 @@ function Dashboard() {
     { id: "customers", label: "Clients", icon: Users },
     { id: "brands", label: "Marques", icon: Tag },
     { id: "categories", label: "Catégories", icon: FolderTree },
+    { id: "delivery", label: "Livraison", icon: Truck },
     { id: "promo", label: "Codes promo", icon: Ticket },
     { id: "blog", label: "Blog", icon: FileText },
     { id: "banners", label: "Bannières", icon: ImageIcon },
@@ -363,6 +364,7 @@ function Dashboard() {
         )}
 
         {tab === "categories" && <CategoriesPanel categories={categories} onChanged={loadAll} onImport={() => setImportKind("categories")} />}
+        {tab === "delivery" && <DeliveryPanel />}
         {tab === "promo" && <PromoPanel promos={promos} onChanged={loadAll} />}
 
         {tab === "blog" && (
@@ -770,6 +772,95 @@ function BlogForm({ post, onClose, onSaved }) {
   );
 }
 
+function DeliveryPanel() {
+  const [wilayas, setWilayas] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const load = () => api.get("/delivery/wilayas").then((r) => setWilayas(r.data));
+  useEffect(() => { load(); }, []);
+  const del = async (w) => {
+    if (!confirm(`Supprimer la wilaya « ${w.name} » ?`)) return;
+    await api.delete(`/admin/wilayas/${w.id}`); load(); toast.success("Supprimée");
+  };
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <button onClick={() => setEditing({ name: "", code: "", base_fee: 400, cities: [], agencies: [], order: 100 })} data-testid="admin-add-wilaya" className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-mint-600 text-white font-semibold text-sm"><Plus className="w-4 h-4" /> Ajouter une wilaya</button>
+        <span className="text-sm text-slate-400">{wilayas.length} wilayas · gère les prix par wilaya, commune et agence</span>
+      </div>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {wilayas.map((w) => (
+          <div key={w.id} className="bg-white rounded-2xl border border-slate-200/80 p-4" data-testid={`admin-wilaya-${w.id}`}>
+            <div className="flex items-center justify-between">
+              <div className="font-semibold text-sm flex items-center gap-2"><MapPin className="w-4 h-4 text-mint-600" /> {w.code} — {w.name}</div>
+              <div className="flex gap-1">
+                <button onClick={() => setEditing(w)} data-testid={`admin-edit-wilaya-${w.id}`} className="text-slate-400 hover:text-mint-700"><Pencil className="w-4 h-4" /></button>
+                <button onClick={() => del(w)} className="text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+              </div>
+            </div>
+            <div className="text-xs text-slate-500 mt-2">Base: <span className="font-semibold text-mint-700">{w.base_fee} DA</span> · {w.cities.length} communes · {w.agencies.length} agences</div>
+          </div>
+        ))}
+      </div>
+      {editing && <WilayaEditor w={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
+    </div>
+  );
+}
+
+function FeeListEditor({ label, items, onChange }) {
+  const [name, setName] = useState("");
+  const [fee, setFee] = useState("");
+  const add = () => { if (!name.trim()) return; onChange([...items, { name: name.trim(), fee: Number(fee) || 0 }]); setName(""); setFee(""); };
+  const upd = (i, k, v) => onChange(items.map((it, idx) => idx === i ? { ...it, [k]: k === "fee" ? Number(v) || 0 : v } : it));
+  const rm = (i) => onChange(items.filter((_, idx) => idx !== i));
+  return (
+    <div>
+      <div className="text-sm font-semibold text-slate-dark mb-2">{label} ({items.length})</div>
+      <div className="space-y-2 max-h-56 overflow-auto pr-1 mb-2">
+        {items.map((it, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <input value={it.name} onChange={(e) => upd(i, "name", e.target.value)} className={`${inp} flex-1`} />
+            <input type="number" value={it.fee} onChange={(e) => upd(i, "fee", e.target.value)} className={`${inp} w-24`} placeholder="Prix" />
+            <button type="button" onClick={() => rm(i)} className="text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={`Nom ${label.toLowerCase()}`} className={`${inp} flex-1`} />
+        <input type="number" value={fee} onChange={(e) => setFee(e.target.value)} placeholder="Prix" className={`${inp} w-24`} />
+        <button type="button" onClick={add} className="px-3 py-2 rounded-xl bg-mint-100 text-mint-700 text-sm font-semibold whitespace-nowrap"><Plus className="w-4 h-4 inline" /> Ajouter</button>
+      </div>
+    </div>
+  );
+}
+
+function WilayaEditor({ w, onClose, onSaved }) {
+  const [f, setF] = useState({ ...w });
+  const setV = (k, v) => setF((p) => ({ ...p, [k]: v }));
+  const save = async () => {
+    if (!f.name) { toast.error("Nom requis"); return; }
+    const payload = { name: f.name, code: f.code, base_fee: Number(f.base_fee) || 0, cities: f.cities, agencies: f.agencies, order: Number(f.order) || 100 };
+    try {
+      if (f.id) await api.put(`/admin/wilayas/${f.id}`, payload); else await api.post("/admin/wilayas", payload);
+      toast.success("Wilaya enregistrée"); onSaved();
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+  };
+  return (
+    <Modal title={f.id ? `Modifier ${f.name}` : "Nouvelle wilaya"} onClose={onClose} wide>
+      <div className="grid grid-cols-3 gap-3">
+        <L label="Nom"><input value={f.name} onChange={(e) => setV("name", e.target.value)} data-testid="wilaya-name" className={inp} /></L>
+        <L label="Code"><input value={f.code} onChange={(e) => setV("code", e.target.value)} className={inp} /></L>
+        <L label="Prix de base (DA)"><input type="number" value={f.base_fee} onChange={(e) => setV("base_fee", e.target.value)} data-testid="wilaya-base-fee" className={inp} /></L>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-5 mt-3">
+        <FeeListEditor label="Communes (livraison domicile)" items={f.cities} onChange={(v) => setV("cities", v)} />
+        <FeeListEditor label="Agences (point relais)" items={f.agencies} onChange={(v) => setV("agencies", v)} />
+      </div>
+      <button onClick={save} data-testid="wilaya-save" className="w-full mt-4 py-3 rounded-full bg-mint-600 text-white font-semibold">Enregistrer</button>
+    </Modal>
+  );
+}
+
+
 function SettingsPanel() {
   const { refresh } = useSettings();
   const [f, setF] = useState(null);
@@ -805,6 +896,7 @@ function SettingsPanel() {
           <L label="WhatsApp (BaridiMob)"><input value={f.whatsapp_number || ""} onChange={(e) => set("whatsapp_number", e.target.value)} placeholder="+213..." data-testid="set-whatsapp" className={inp} /></L>
           <div className="sm:col-span-2"><L label="Adresse"><input value={f.address} onChange={(e) => set("address", e.target.value)} data-testid="set-address" className={inp} /></L></div>
           <div className="sm:col-span-2"><L label="Lien Google Maps (optionnel — sinon généré depuis l'adresse)"><input value={f.maps_link || ""} onChange={(e) => set("maps_link", e.target.value)} placeholder="https://maps.google.com/..." data-testid="set-maps" className={inp} /></L></div>
+          <div className="sm:col-span-2"><L label="Lien Visite virtuelle 360°"><input value={f.virtual_tour_url || ""} onChange={(e) => set("virtual_tour_url", e.target.value)} placeholder="https://... (lien d'intégration de la visite 360°)" data-testid="set-virtual-tour" className={inp} /></L></div>
         </div>
       </div>
       <div>

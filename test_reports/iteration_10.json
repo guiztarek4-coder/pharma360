@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 10 (Pharma360 delivery + auth batch) — Backend: 5/5 pytest pass (58 wilayas seeded with Alger communes {Alger-Centre, Bab El Oued, El Harrach, Draria, Rouiba,...}; domicile pricing = base_fee(400) + commune(150 temp) = 550 DA verified; relais = agency fee only; pickup = 0; admin wilayas CRUD create/PUT/DELETE reflects in GET /delivery/wilayas; forgot-password always returns ok + read token from mongo password_reset_tokens; reset-password success, reuse->400, invalid->400, old pwd fails, new pwd logs in; GET/PUT /settings virtual_tour_url roundtrip). Frontend: /visite-360 renders virtual-tour-page with virtual-tour-placeholder (empty setting); Contact virtual-tour-link navigates to /visite-360; /reset-password?token=fakeXYZ shows form and submits -> 400 error state; /compte forgot-link switches AuthForm to forgot mode with forgot-email input that submits ok; /commande checkout: selecting Alger populates 11 commune options and shows domicile=400 DA (base), relais=350 DA (Yalidine agency fee only), pickup=Gratuit — matches backend math; checkout-login-toggle reveals login form; checkout-forgot-toggle reveals forgot form. All data-testids present and functional.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Checkout wilaya default", "issue": "State default form.wilaya='Alger' but before wilayas fetch the <select> DOM shows first loaded option (01 — Adrar) after list arrives; the visible option and state can be out of sync until user selects a wilaya, causing initial commune dropdown to appear empty/placeholder even though state expects Alger. Consider syncing form.wilaya to first wilaya once list loads, or explicitly set to 'Alger' after fetch if present.", "selector": "[data-testid=\"checkout-wilaya\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration10_delivery_auth.py",
+    "/app/test_reports/pytest/iteration10.xml"
+  ],
+  "action_items": [
+    "(Optional) Fix Checkout initial wilaya/state mismatch: on wilayas load, if form.wilaya not in list, default to first (or keep 'Alger' by ensuring select matches state)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is still large (1810 lines) — consider splitting delivery/wilayas + auth reset into routers.",
+    "compute_delivery falls back to settings.delivery_fees or WILAYA_DELIVERY (500) if wilaya doc missing — harmless but could log a warning for unknown wilaya names.",
+    "forgot_password uses request.headers['origin']; if missing, link becomes '/reset-password?token=...' with no host — set PUBLIC_URL env fallback (already partially handled) but confirm SENDER/RESEND is functional in prod.",
+    "Admin PUT /settings requires the full body (no partial merge). Frontend already sends full body. OK."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration10_delivery_auth.py (new)"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "~95% (all target flows OK; 1 minor initial-state UX quirk)"},
+  "test_credentials": "pharmacie360benak@gmail.com / Aminetarek1992* (admin)",
+  "seed_data_creation": "3 disposable test orders (Alger domicile / relais / pickup) created via /api/orders then deleted (mongo.orders + notifications) with stock +3 restored. 1 disposable user (test_reset_*@example.com) created for reset-password flow, then deleted along with its password_reset_tokens. Temporary Alger commune 'Alger-Centre' fee set to 150 DA for math test then reverted to original (0). virtual_tour_url temporarily set then restored to original empty value. Baseline (58 wilayas / 13 categories / 104 products) intact.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All 5 backend + 5 frontend iteration-10 features validated. Reset-token flow requires reading Mongo directly because Resend does not deliver in test env — test_iteration10_delivery_auth.py::test_forgot_reset_password_flow already does this. Note the low-priority initial wilaya sync quirk in Checkout.jsx if you retest.",
+  "rca of the issue": "N/A — no critical issues found. Minor UI quirk: when Checkout mounts, form.wilaya='Alger' but the wilayas list arrives later, so the <select> renders whatever the browser picks first (Adrar) while state still says Alger; user must click Alger to sync. Fix suggestion in action_items."
+}

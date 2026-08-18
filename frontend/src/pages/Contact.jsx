@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { MapPin, Phone, Mail, Clock, Send } from "lucide-react";
+import { Link } from "react-router-dom";
+import { MapPin, Phone, Mail, Clock, Send, Compass } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
 import { useSettings } from "@/context/SettingsContext";
@@ -25,8 +26,15 @@ export default function Contact() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
-      <h1 className="font-display font-extrabold text-3xl text-slate-dark mb-2">Contactez-nous</h1>
-      <p className="text-slate-500 mb-8">Une question, un conseil ? Notre équipe est à votre écoute 7j/7.</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap mb-8">
+        <div>
+          <h1 className="font-display font-extrabold text-3xl text-slate-dark mb-2">Contactez-nous</h1>
+          <p className="text-slate-500">Une question, un conseil ? Notre équipe est à votre écoute 7j/7.</p>
+        </div>
+        <Link to="/visite-360" data-testid="virtual-tour-link" className="flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-mint-600 to-mint-500 text-white font-semibold text-sm shadow-lg shadow-mint-600/30 hover:shadow-xl transition-shadow">
+          <Compass className="w-4 h-4" /> Explorez à 360° notre boutique
+        </Link>
+      </div>
 
       <div className="grid lg:grid-cols-2 gap-8">
         <div className="space-y-4">

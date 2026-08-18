@@ -21,6 +21,8 @@ import BrandPage from "@/pages/BrandPage";
 import { Blog, BlogPost } from "@/pages/Blog";
 import Contact from "@/pages/Contact";
 import { Privacy, Terms } from "@/pages/Legal";
+import ResetPassword from "@/pages/ResetPassword";
+import VirtualTour from "@/pages/VirtualTour";
 import Admin from "@/pages/Admin";
 
 function Shell({ children }) {
@@ -62,6 +64,8 @@ function App() {
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/confidentialite" element={<Privacy />} />
                 <Route path="/cgv" element={<Terms />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/visite-360" element={<VirtualTour />} />
                 <Route path="/admin" element={<Admin />} />
               </Routes>
             </Shell>

@@ -79,6 +79,13 @@ Site e-commerce de parapharmacie "Pharma360" basé en Algérie, inspiré de phar
 - **2 cases obligatoires au paiement** : acceptation confidentialité/CGV + « Je ne suis pas un robot » (case simple) ; bouton de validation désactivé tant que les deux ne sont pas cochées.
 - Tests : backend 5/5 ; frontend ~95% (le petit souci UX de la case CGV a été corrigé et re-vérifié).
 
+## Implemented (2026-08-18 — iteration 10)
+- **Livraison par wilaya → commune / agence** : 58 wilayas pré-chargées (avec communes principales + 2 agences chacune). Domicile = prix wilaya (base_fee) + prix commune ; Point relais = prix de l'agence uniquement. Entièrement gérable dans l'admin (onglet **Livraison** : CRUD wilayas + éditeurs de communes et d'agences avec prix). Endpoints `GET /api/delivery/wilayas`, `POST/PUT/DELETE /api/admin/wilayas`. `compute_delivery` mis à jour.
+- **Connexion rapide au checkout** : « Déjà client ? Connectez-vous » pré-remplit les coordonnées + lien « Mot de passe oublié ? ».
+- **Mot de passe oublié / réinitialisation** : `POST /api/auth/forgot-password` (email via Resend, ne révèle pas si le compte existe) + `POST /api/auth/reset-password` (token single-use, expire 1h, TTL index). Page `/reset-password`. Disponible sur `/compte` et au checkout.
+- **Visite virtuelle 360°** : page `/visite-360` (lien `virtual_tour_url` éditable dans l'admin, placeholder si vide) + bouton « Explorez à 360° notre boutique » sur la page Contact.
+- Tests : backend 5/5 ; frontend ~95% (petit quirk de synchro du select wilaya corrigé).
+
 ## Known Limitations / MOCKED
 - Paiement en ligne par carte (CIB/Edahabia) = **SIMULÉ (démo)**. Stripe ne supporte pas l'Algérie (DZ), donc pas de passerelle réelle. La commande carte est marquée "payée" sans transaction réelle.
 - Email de notification de commande = **inactif tant que RESEND_API_KEY n'est pas configuré** (la notification in-app fonctionne).

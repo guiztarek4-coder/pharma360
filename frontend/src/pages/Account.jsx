@@ -22,6 +22,10 @@ function AuthForm() {
       if (mode === "login") {
         await login(f.identifier, f.password);
         toast.success("Connexion réussie");
+      } else if (mode === "forgot") {
+        const { data } = await api.post("/auth/forgot-password", { email: f.email });
+        toast.success(data.message || "Email envoyé si le compte existe.");
+        setMode("login");
       } else {
         await register({ first_name: f.first_name, last_name: f.last_name, email: f.email || null, phone: f.phone || null, password: f.password });
         toast.success("Compte créé avec succès");
@@ -56,16 +60,23 @@ function AuthForm() {
               <Input label="Mot de passe" type="password" value={f.password} onChange={set("password")} required testid="reg-password" />
               <p className="text-xs text-slate-400">Renseignez au moins un email ou un numéro de téléphone.</p>
             </>
+          ) : mode === "forgot" ? (
+            <>
+              <p className="text-sm text-slate-500">Saisissez votre email : vous recevrez un lien pour créer un nouveau mot de passe.</p>
+              <Input label="Email" type="email" value={f.email} onChange={set("email")} required testid="forgot-email" />
+            </>
           ) : (
             <>
               <Input label="Email ou téléphone" value={f.identifier} onChange={set("identifier")} required testid="login-identifier" />
               <Input label="Mot de passe" type="password" value={f.password} onChange={set("password")} required testid="login-password" />
+              <button type="button" onClick={() => { setErr(""); setMode("forgot"); }} data-testid="forgot-link" className="text-sm text-mint-700 hover:underline">Mot de passe oublié ?</button>
             </>
           )}
           <button type="submit" disabled={loading} data-testid="auth-submit"
             className="w-full py-3 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold shadow-lg shadow-mint-600/30 disabled:opacity-50">
-            {loading ? "…" : mode === "login" ? "Se connecter" : "Créer mon compte"}
+            {loading ? "…" : mode === "login" ? "Se connecter" : mode === "forgot" ? "Envoyer le lien" : "Créer mon compte"}
           </button>
+          {mode === "forgot" && <button type="button" onClick={() => setMode("login")} className="w-full text-sm text-slate-500">Retour à la connexion</button>}
         </form>
       </div>
     </div>

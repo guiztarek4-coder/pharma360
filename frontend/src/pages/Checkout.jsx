@@ -1,16 +1,15 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { Truck, CreditCard, ShoppingBag, Store, MapPin, Tag, Check, MessageCircle, ShieldCheck } from "lucide-react";
+import { useNavigate, Link } from "react-router-dom";
+import { Truck, CreditCard, ShoppingBag, Store, MapPin, Tag, Check, MessageCircle, ShieldCheck, LogIn, User } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { useSettings } from "@/context/SettingsContext";
-import { WILAYAS } from "@/lib/site";
 
 export default function Checkout() {
   const { items, total, clear } = useCart();
-  const { user } = useAuth();
+  const { user, login } = useAuth();
   const { settings } = useSettings();
   const navigate = useNavigate();
   const [payment, setPayment] = useState(settings.payment_cod_enabled ? "cod" : (settings.payment_baridimob_enabled ? "baridimob" : "card"));
@@ -20,17 +19,31 @@ export default function Checkout() {
   const [promo, setPromo] = useState(null);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [notRobot, setNotRobot] = useState(false);
+  const [wilayas, setWilayas] = useState([]);
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginData, setLoginData] = useState({ identifier: "", password: "" });
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
   const [form, setForm] = useState({
     full_name: user ? `${user.first_name} ${user.last_name}` : "",
     phone: user?.phone || "",
     email: user?.email || "",
     wilaya: "Alger",
     commune: "",
+    agency: "",
     street: "",
     notes: "",
   });
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  useEffect(() => {
+    api.get("/delivery/wilayas").then((r) => {
+      setWilayas(r.data);
+      setForm((f) => (r.data.some((w) => w.name === f.wilaya) ? f : { ...f, wilaya: r.data[0]?.name || f.wilaya, commune: "", agency: "" }));
+    });
+  }, []);
 
   useEffect(() => {
     if (user) setForm((f) => ({
@@ -41,13 +54,43 @@ export default function Checkout() {
     }));
   }, [user]);
 
+  const currentWilaya = wilayas.find((w) => w.name === form.wilaya);
+  const cities = currentWilaya?.cities || [];
+  const agencies = currentWilaya?.agencies || [];
+
   const deliveryFee = (() => {
     if (deliveryMethod === "pickup" || items.length === 0) return 0;
-    if (deliveryMethod === "relais") return settings.relais_fee ?? 350;
-    return (settings.delivery_fees && settings.delivery_fees[form.wilaya]) || settings.delivery_fee || 500;
+    if (!currentWilaya) return settings.delivery_fee || 500;
+    if (deliveryMethod === "relais") {
+      const a = agencies.find((x) => x.name === form.agency);
+      return a ? a.fee : (settings.relais_fee ?? 350);
+    }
+    const c = cities.find((x) => x.name === form.commune);
+    return (currentWilaya.base_fee || 0) + (c ? c.fee : 0);
   })();
   const discount = promo ? promo.discount : 0;
   const grandTotal = Math.max(0, total + deliveryFee - discount);
+
+  const doQuickLogin = async (e) => {
+    e.preventDefault();
+    setLoggingIn(true);
+    try {
+      await login(loginData.identifier, loginData.password);
+      toast.success("Connecté ! Vos coordonnées ont été pré-remplies.");
+      setShowLogin(false);
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail));
+    } finally { setLoggingIn(false); }
+  };
+
+  const doForgot = async (e) => {
+    e.preventDefault();
+    try {
+      const { data } = await api.post("/auth/forgot-password", { email: forgotEmail });
+      toast.success(data.message || "Email envoyé si le compte existe.");
+      setShowForgot(false); setForgotEmail("");
+    } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
+  };
 
   const applyPromo = async () => {
     if (!promoInput.trim()) return;
@@ -74,7 +117,11 @@ export default function Checkout() {
   const submit = async (e) => {
     e.preventDefault();
     if (!form.full_name || !form.phone) { toast.error("Nom et téléphone requis"); return; }
-    if (deliveryMethod !== "pickup" && !form.street) { toast.error("Adresse de livraison requise"); return; }
+    if (deliveryMethod === "domicile") {
+      if (!form.street) { toast.error("Adresse de livraison requise"); return; }
+      if (cities.length > 0 && !form.commune) { toast.error("Veuillez choisir votre commune"); return; }
+    }
+    if (deliveryMethod === "relais" && !form.agency) { toast.error("Veuillez choisir une agence / point relais"); return; }
     if (!acceptTerms) { toast.error("Veuillez accepter la politique de confidentialité et les CGV"); return; }
     if (!notRobot) { toast.error("Veuillez confirmer que vous n'êtes pas un robot"); return; }
     setSubmitting(true);
@@ -114,6 +161,37 @@ export default function Checkout() {
       <h1 className="font-display font-extrabold text-2xl sm:text-3xl mb-8">Finaliser ma commande</h1>
       <form onSubmit={submit} className="grid lg:grid-cols-3 gap-6 lg:gap-8">
         <div className="lg:col-span-2 space-y-6">
+          {/* Quick login */}
+          {!user && (
+            <div className="bg-mint-50/60 rounded-2xl border border-mint-100 p-4" data-testid="checkout-quick-login">
+              {!showLogin ? (
+                <button type="button" onClick={() => setShowLogin(true)} data-testid="checkout-login-toggle" className="flex items-center gap-2 text-sm font-semibold text-mint-700 hover:text-mint-800">
+                  <LogIn className="w-4 h-4" /> Déjà client ? Cliquez ici pour vous connecter
+                </button>
+              ) : showForgot ? (
+                <form onSubmit={doForgot} className="space-y-3">
+                  <p className="text-sm font-semibold text-slate-dark">Mot de passe oublié</p>
+                  <input type="email" required value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="Votre email" data-testid="checkout-forgot-email" className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
+                  <div className="flex gap-2">
+                    <button type="submit" data-testid="checkout-forgot-submit" className="px-5 py-2 rounded-full bg-mint-600 text-white font-semibold text-sm">Envoyer le lien</button>
+                    <button type="button" onClick={() => setShowForgot(false)} className="text-sm text-slate-500">Retour</button>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={doQuickLogin} className="space-y-3">
+                  <p className="text-sm font-semibold text-slate-dark flex items-center gap-2"><User className="w-4 h-4 text-mint-600" /> Connexion</p>
+                  <input value={loginData.identifier} onChange={(e) => setLoginData({ ...loginData, identifier: e.target.value })} placeholder="Email ou téléphone" data-testid="checkout-login-email" className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
+                  <input type="password" value={loginData.password} onChange={(e) => setLoginData({ ...loginData, password: e.target.value })} placeholder="Mot de passe" data-testid="checkout-login-password" className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button type="submit" disabled={loggingIn} data-testid="checkout-login-submit" className="px-5 py-2 rounded-full bg-mint-600 text-white font-semibold text-sm disabled:opacity-60">{loggingIn ? "…" : "Se connecter"}</button>
+                    <button type="button" onClick={() => setShowForgot(true)} data-testid="checkout-forgot-toggle" className="text-sm text-mint-700 underline">Mot de passe oublié ?</button>
+                    <button type="button" onClick={() => setShowLogin(false)} className="text-sm text-slate-500 ml-auto">Continuer sans compte</button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
+
           {/* Delivery method */}
           <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6">
             <h2 className="font-display font-bold text-lg mb-4">Mode de livraison</h2>
@@ -137,14 +215,32 @@ export default function Checkout() {
                 <>
                   <div>
                     <label className="block text-sm font-medium text-slate-600 mb-1.5">Wilaya *</label>
-                    <select value={form.wilaya} onChange={set("wilaya")} data-testid="checkout-wilaya"
+                    <select value={form.wilaya} onChange={(e) => setForm({ ...form, wilaya: e.target.value, commune: "", agency: "" })} data-testid="checkout-wilaya"
                       className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500 bg-white">
-                      {WILAYAS.map((w) => <option key={w} value={w}>{w}</option>)}
+                      {wilayas.map((w) => <option key={w.id} value={w.name}>{w.code} — {w.name}</option>)}
                     </select>
                   </div>
-                  <Field label="Commune" value={form.commune} onChange={set("commune")} testid="checkout-commune" />
+                  {deliveryMethod === "domicile" ? (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-600 mb-1.5">Commune {cities.length > 0 ? "*" : "(optionnel)"}</label>
+                      <select value={form.commune} onChange={set("commune")} data-testid="checkout-commune"
+                        className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500 bg-white">
+                        <option value="">{cities.length ? "— Choisir une commune —" : "Aucune commune (prix de base)"}</option>
+                        {cities.map((c) => <option key={c.name} value={c.name}>{c.name}{c.fee ? ` (+${formatDA(c.fee)})` : ""}</option>)}
+                      </select>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-600 mb-1.5">Agence / Point relais *</label>
+                      <select value={form.agency} onChange={set("agency")} data-testid="checkout-agency"
+                        className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500 bg-white">
+                        <option value="">— Choisir une agence —</option>
+                        {agencies.map((a) => <option key={a.name} value={a.name}>{a.name} ({formatDA(a.fee)})</option>)}
+                      </select>
+                    </div>
+                  )}
                   <div className="sm:col-span-2">
-                    <Field label="Adresse *" value={form.street} onChange={set("street")} testid="checkout-street" placeholder="Rue, quartier, repère..." />
+                    <Field label={deliveryMethod === "relais" ? "Adresse (optionnel)" : "Adresse *"} value={form.street} onChange={set("street")} testid="checkout-street" placeholder="Rue, quartier, repère..." />
                   </div>
                 </>
               )}
