@@ -806,9 +806,10 @@ function DeliveryPanel() {
   );
 }
 
-function FeeListEditor({ label, items, onChange }) {
+function FeeListEditor({ label, items, onChange, tid }) {
   const [name, setName] = useState("");
   const [fee, setFee] = useState("");
+  const rowInp = "px-3 py-2 rounded-xl border border-mint-200 text-sm bg-white outline-none focus:ring-2 focus:ring-mint-500";
   const add = () => { if (!name.trim()) return; onChange([...items, { name: name.trim(), fee: Number(fee) || 0 }]); setName(""); setFee(""); };
   const upd = (i, k, v) => onChange(items.map((it, idx) => idx === i ? { ...it, [k]: k === "fee" ? Number(v) || 0 : v } : it));
   const rm = (i) => onChange(items.filter((_, idx) => idx !== i));
@@ -818,16 +819,17 @@ function FeeListEditor({ label, items, onChange }) {
       <div className="space-y-2 max-h-56 overflow-auto pr-1 mb-2">
         {items.map((it, i) => (
           <div key={i} className="flex items-center gap-2">
-            <input value={it.name} onChange={(e) => upd(i, "name", e.target.value)} className={`${inp} flex-1`} />
-            <input type="number" value={it.fee} onChange={(e) => upd(i, "fee", e.target.value)} className={`${inp} w-24`} placeholder="Prix" />
-            <button type="button" onClick={() => rm(i)} className="text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+            <input value={it.name} onChange={(e) => upd(i, "name", e.target.value)} placeholder="Nom" data-testid={`${tid}-name-${i}`} className={`${rowInp} flex-1 min-w-0`} />
+            <input type="number" value={it.fee} onChange={(e) => upd(i, "fee", e.target.value)} placeholder="Prix" data-testid={`${tid}-price-${i}`} className={`${rowInp} w-20 shrink-0`} />
+            <button type="button" onClick={() => rm(i)} data-testid={`${tid}-remove-${i}`} className="text-slate-400 hover:text-red-500 shrink-0"><Trash2 className="w-4 h-4" /></button>
           </div>
         ))}
+        {items.length === 0 && <p className="text-xs text-slate-400">Aucun élément. Ajoutez-en ci-dessous.</p>}
       </div>
-      <div className="flex items-center gap-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={`Nom ${label.toLowerCase()}`} className={`${inp} flex-1`} />
-        <input type="number" value={fee} onChange={(e) => setFee(e.target.value)} placeholder="Prix" className={`${inp} w-24`} />
-        <button type="button" onClick={add} className="px-3 py-2 rounded-xl bg-mint-100 text-mint-700 text-sm font-semibold whitespace-nowrap"><Plus className="w-4 h-4 inline" /> Ajouter</button>
+      <div className="flex items-center gap-2 border-t border-mint-100 pt-2">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nouveau nom" data-testid={`${tid}-add-name`} className={`${rowInp} flex-1 min-w-0`} />
+        <input type="number" value={fee} onChange={(e) => setFee(e.target.value)} placeholder="Prix" data-testid={`${tid}-add-price`} className={`${rowInp} w-20 shrink-0`} />
+        <button type="button" onClick={add} data-testid={`${tid}-add-btn`} className="px-3 py-2 rounded-xl bg-mint-100 text-mint-700 text-sm font-semibold whitespace-nowrap shrink-0"><Plus className="w-4 h-4 inline" /> Ajouter</button>
       </div>
     </div>
   );
@@ -852,8 +854,8 @@ function WilayaEditor({ w, onClose, onSaved }) {
         <L label="Prix de base (DA)"><input type="number" value={f.base_fee} onChange={(e) => setV("base_fee", e.target.value)} data-testid="wilaya-base-fee" className={inp} /></L>
       </div>
       <div className="grid sm:grid-cols-2 gap-5 mt-3">
-        <FeeListEditor label="Communes (livraison domicile)" items={f.cities} onChange={(v) => setV("cities", v)} />
-        <FeeListEditor label="Agences (point relais)" items={f.agencies} onChange={(v) => setV("agencies", v)} />
+        <FeeListEditor label="Communes (livraison domicile)" items={f.cities} onChange={(v) => setV("cities", v)} tid="city" />
+        <FeeListEditor label="Agences (point relais)" items={f.agencies} onChange={(v) => setV("agencies", v)} tid="agency" />
       </div>
       <button onClick={save} data-testid="wilaya-save" className="w-full mt-4 py-3 rounded-full bg-mint-600 text-white font-semibold">Enregistrer</button>
     </Modal>
