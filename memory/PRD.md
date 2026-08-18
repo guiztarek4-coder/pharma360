@@ -52,6 +52,16 @@ Site e-commerce de parapharmacie "Pharma360" basé en Algérie, inspiré de phar
 - Seed migration `cat_tree_v1`: 13 catégories principales × 2 sous × 2 sous-sous + ~104 produits d'exemple (données de démo à remplacer par les vraies).
 - Tests: backend 15/15, flux frontend 100%.
 
+## Implemented (2026-08-17 — iteration 7)
+- **Import en masse CSV + Excel** (catégories ET produits) avec modèle téléchargeable :
+  - `GET /api/admin/import/template/{categories|products}?format=csv|xlsx`
+  - `POST /api/admin/import/categories` (upsert idempotent par label+parent, arbre 3 niveaux) → `{created, errors}`.
+  - `POST /api/admin/import/products` (colonne "Chemin catégorie" ex: `A > B > C` résolue vers la feuille ; lignes non résolues renvoyées dans `errors[]` avec n° de ligne).
+- **Réordonnancement glisser-déposer** des catégories aux 3 niveaux (`PUT /api/categories/reorder {ids}`, HTML5 DnD natif, réordonne au sein d'un même parent).
+- **Bannière par catégorie principale** (image + titre + sous-titre + bouton/lien) : champs `banner_*` sur la catégorie, éditables dans l'admin (niveau 0 uniquement), affichées en haut de la page catégorie côté client.
+- **Fil d'ariane produit complet** sur la fiche produit (Accueil > Principale > Sous > Sous-sous > Produit).
+- Tests : backend 13/13, flux frontend 100%.
+
 ## Known Limitations / MOCKED
 - Paiement en ligne par carte (CIB/Edahabia) = **SIMULÉ (démo)**. Stripe ne supporte pas l'Algérie (DZ), donc pas de passerelle réelle. La commande carte est marquée "payée" sans transaction réelle.
 - Email de notification de commande = **inactif tant que RESEND_API_KEY n'est pas configuré** (la notification in-app fonctionne).

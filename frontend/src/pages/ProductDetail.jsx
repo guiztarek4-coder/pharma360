@@ -4,6 +4,7 @@ import { ShoppingCart, Plus, Minus, ShieldCheck, Truck, CreditCard, ChevronRight
 import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
 import { useCart } from "@/context/CartContext";
+import { useCategories } from "@/context/CategoriesContext";
 import { toast } from "sonner";
 
 function Stars({ value, size = "w-4 h-4", onSelect }) {
@@ -79,6 +80,7 @@ function Reviews({ productId }) {
 export default function ProductDetail() {
   const { id } = useParams();
   const { addItem } = useCart();
+  const { getAncestors } = useCategories();
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
   const [qty, setQty] = useState(1);
@@ -90,7 +92,9 @@ export default function ProductDetail() {
     api.get(`/products/${id}`).then((r) => {
       setProduct(r.data);
       setActiveImg(0);
-      api.get(`/products?category=${r.data.category}&limit=5`).then((rr) => setRelated(rr.data.filter((p) => p.id !== id).slice(0, 4)));
+      const cid = r.data.category_id;
+      const url = cid ? `/products?category_id=${cid}&limit=5` : `/products?category=${r.data.category}&limit=5`;
+      api.get(url).then((rr) => setRelated(rr.data.filter((p) => p.id !== id).slice(0, 4)));
     });
   }, [id]);
 
@@ -99,12 +103,19 @@ export default function ProductDetail() {
   const promo = product.old_price && product.old_price > product.price;
   const discount = promo ? Math.round((1 - product.price / product.old_price) * 100) : 0;
   const images = product.images?.length ? product.images : [null];
+  const catPath = product.category_id ? getAncestors(product.category_id) : [];
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-      <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-6">
+      <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-6 flex-wrap" data-testid="product-breadcrumb">
         <Link to="/" className="hover:text-mint-700">Accueil</Link><ChevronRight className="w-3 h-3" />
-        <Link to={`/categorie/${product.category}`} className="hover:text-mint-700 capitalize">{product.category}</Link><ChevronRight className="w-3 h-3" />
+        {catPath.length > 0 ? catPath.map((c) => (
+          <span key={c.id} className="flex items-center gap-1.5">
+            <Link to={`/categorie/${c.id}`} className="hover:text-mint-700">{c.label}</Link><ChevronRight className="w-3 h-3" />
+          </span>
+        )) : (
+          <><span className="capitalize">{product.category}</span><ChevronRight className="w-3 h-3" /></>
+        )}
         <span className="text-slate-600 truncate">{product.name}</span>
       </div>
 

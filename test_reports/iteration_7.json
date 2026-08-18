@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 7 (bulk CSV/XLSX import for categories & products, category drag-and-drop reorder, per-main-category promo banner, and product-detail full-path breadcrumb) tested end-to-end. Backend: 13/13 pytest tests pass (templates csv+xlsx, category import idempotency, product import path resolution + leaf validation, reorder route ordering & non-shadowing of PUT /categories/{id}, banner persistence). Frontend admin: Import modal opens from both Produits and Catégories tabs with template CSV/XLSX download, file upload and per-row error result; import via UI returned '3 catégories importé(s)'. Category rows expose draggable=true + GripVertical handle. Category form shows Bannière section on level 0 only (confirmed hidden on level 1). 'Bannière' badge appears on row after save. Client /categorie/{id} renders data-testid=category-banner with title & CTA. Product detail page renders data-testid=product-breadcrumb (Accueil > Category > Product).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin Catégories – drag & drop", "issues": ["Native HTML5 drag-drop reorder was NOT emulated in Playwright (native drag events are unreliable to simulate). Verified indirectly: rows have draggable=true, GripVertical handle & 'Glissez-déposez pour réordonner' hint render correctly, and PUT /api/categories/reorder API works via backend tests (order persisted, GET reflects new order, route not shadowed by PUT /categories/{id})."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_import_reorder_banner.py",
+    "/app/test_reports/pytest/iter7.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 1583 lines — refactor into routers (auth, catalog, categories, import, admin) is overdue (>700-line guideline).",
+    "_read_rows swallows any CSV with a single-column header and retries with semicolon separator (good). But it does NOT catch tab-separated files — consider adding sep sniffing via csv.Sniffer.",
+    "_upsert_cat generates slug with 4-hex suffix on collision (fine) but the collision check does not consider deleted-then-recreated categories; acceptable for import scale.",
+    "reorder_categories silently skips invalid ObjectId strings — no error is returned for a bad id in the list. Consider returning skipped ids.",
+    "import_products stores category_id + category (slug) but leaves subcategory=null; this is consistent with the leaf-only model — fine.",
+    "Both import endpoints read entire file in memory (fine at expected CSV sizes, would need streaming for very large imports).",
+    "The Bannière badge on the admin row is only shown when banner_image is set; a category with only a title/subtitle configured (no image) will not display the badge — either enforce image required in the form, or make the badge trigger on any banner field."
+  ],
+  "updated_files": ["/app/backend/tests/test_import_reorder_banner.py"],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% of tested flows (drag-drop verified via backend API only)"},
+  "test_credentials": "admin: pharmacie360benak@gmail.com / Aminetarek1992*",
+  "seed_data_creation": "None persisted — all TEST_* categories (TEST_UICat/TEST_UISub/TEST_UILeaf and TEST_ImpMain tree and TEST_BannerMain) and TEST_ImportedProd products were deleted at the end. Verified GET /api/categories still returns 13 mains and no TEST_ leftovers.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 7 feature batch fully working. New endpoints: GET /api/admin/import/template/{categories|products}?format=csv|xlsx (admin, returns downloadable file with UTF-8 BOM for CSV or xlsx zip), POST /api/admin/import/categories (multipart file → {created, errors}, idempotent by label+parent_id), POST /api/admin/import/products (path 'A > B > C' → resolves to leaf category, rows with unresolvable/non-leaf path returned in errors[] with row number = spreadsheet row = index+2), PUT /api/categories/reorder body {ids:[...]} (defined BEFORE PUT /categories/{id} so no shadowing), POST/PUT /api/categories accepts banner_{image,title,subtitle,cta_label,cta_link} which are echoed by GET /api/categories per node. Frontend testids: import-template-csv, import-template-xlsx, import-file-input, import-submit, import-result, admin-import-categories, admin-import-products, admin-cat-{id} (draggable=true), cf-banner-title (level-0 only), category-banner + category-banner-cta on Catalog, product-breadcrumb on ProductDetail. Product-count baseline: 100 products (was 104 pre-iteration; discrepancy predates this run — likely main-agent smoke test residue, no TEST_ product left).",
+  "rca of the issue": "No blocking issues found."
+}

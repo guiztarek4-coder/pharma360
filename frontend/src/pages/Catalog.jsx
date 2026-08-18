@@ -120,6 +120,22 @@ export default function Catalog() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
       {isDrilldown && ancestors.length > 0 && <Breadcrumb ancestors={ancestors} />}
 
+      {isDrilldown && node && (node.banner_image || node.banner_title) && (
+        <div className="relative rounded-3xl overflow-hidden mb-8 min-h-[180px] sm:min-h-[240px] flex items-center" data-testid="category-banner">
+          {node.banner_image
+            ? <img src={mediaUrl(node.banner_image)} alt={node.label} className="absolute inset-0 w-full h-full object-cover" />
+            : <div className="absolute inset-0 bg-gradient-to-br from-mint-100 to-mint-300" />}
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-900/70 via-slate-900/30 to-transparent" />
+          <div className="relative z-10 p-6 sm:p-10 max-w-xl">
+            <h2 className="font-display font-extrabold text-2xl sm:text-4xl text-white leading-tight">{node.banner_title || node.label}</h2>
+            {node.banner_subtitle && <p className="text-white/90 text-sm sm:text-base mt-2">{node.banner_subtitle}</p>}
+            {node.banner_cta_label && node.banner_cta_link && (
+              <Link to={node.banner_cta_link} data-testid="category-banner-cta" className="inline-block mt-4 px-6 py-3 rounded-full bg-white text-mint-700 font-semibold text-sm hover:bg-mint-50 transition-colors">{node.banner_cta_label}</Link>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div>
           <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-slate-dark" data-testid="catalog-title">{title}</h1>

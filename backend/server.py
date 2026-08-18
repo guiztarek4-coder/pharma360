@@ -240,6 +240,15 @@ class CategoryInput(BaseModel):
     image: Optional[str] = None
     parent_id: Optional[str] = None
     order: int = 100
+    banner_image: Optional[str] = None
+    banner_title: Optional[str] = None
+    banner_subtitle: Optional[str] = None
+    banner_cta_label: Optional[str] = None
+    banner_cta_link: Optional[str] = None
+
+
+class ReorderInput(BaseModel):
+    ids: List[str]
 
 
 class PromoInput(BaseModel):
@@ -536,6 +545,11 @@ def _cat_public(doc):
         "order": doc.get("order", 100),
         "level": doc.get("level", 0),
         "parent_id": doc.get("parent_id"),
+        "banner_image": doc.get("banner_image"),
+        "banner_title": doc.get("banner_title"),
+        "banner_subtitle": doc.get("banner_subtitle"),
+        "banner_cta_label": doc.get("banner_cta_label"),
+        "banner_cta_link": doc.get("banner_cta_link"),
     }
 
 
@@ -593,17 +607,31 @@ async def create_category(data: CategoryInput, admin: dict = Depends(get_admin_u
         slug = f"{slug}-{uuid.uuid4().hex[:4]}"
     doc = {"slug": slug, "label": data.label, "icon": data.icon, "image": data.image,
            "parent_id": data.parent_id, "level": level, "order": data.order,
+           "banner_image": data.banner_image, "banner_title": data.banner_title,
+           "banner_subtitle": data.banner_subtitle, "banner_cta_label": data.banner_cta_label,
+           "banner_cta_link": data.banner_cta_link,
            "created_at": now_utc().isoformat()}
     res = await db.categories.insert_one(doc)
     doc["_id"] = res.inserted_id
     return _cat_public(doc)
 
 
+@api.put("/categories/reorder")
+async def reorder_categories(data: ReorderInput, admin: dict = Depends(get_admin_user)):
+    for idx, cid in enumerate(data.ids):
+        if ObjectId.is_valid(cid):
+            await db.categories.update_one({"_id": ObjectId(cid)}, {"$set": {"order": idx}})
+    return {"ok": True}
+
+
 @api.put("/categories/{cat_id}")
 async def update_category(cat_id: str, data: CategoryInput, admin: dict = Depends(get_admin_user)):
     await db.categories.update_one(
         {"_id": ObjectId(cat_id)},
-        {"$set": {"label": data.label, "icon": data.icon, "image": data.image, "order": data.order}})
+        {"$set": {"label": data.label, "icon": data.icon, "image": data.image, "order": data.order,
+                  "banner_image": data.banner_image, "banner_title": data.banner_title,
+                  "banner_subtitle": data.banner_subtitle, "banner_cta_label": data.banner_cta_label,
+                  "banner_cta_link": data.banner_cta_link}})
     doc = await db.categories.find_one({"_id": ObjectId(cat_id)})
     return _cat_public(doc)
 
@@ -621,6 +649,197 @@ async def delete_category(cat_id: str, admin: dict = Depends(get_admin_user)):
     await db.categories.delete_many({"_id": {"$in": obj_ids}})
     await db.products.update_many({"category_id": {"$in": to_delete}}, {"$set": {"category_id": None}})
     return {"ok": True}
+
+
+# ----------------------------------------------------------------------------
+# Bulk import (CSV / Excel) — categories & products
+# ----------------------------------------------------------------------------
+def _pick(row, *names):
+    for n in names:
+        for k in row:
+            if str(k).strip().lower() == n.lower():
+                v = row[k]
+                return "" if v is None else str(v).strip()
+    return ""
+
+
+def _truthy(v):
+    return str(v).strip().lower() in ("oui", "yes", "true", "1", "x", "vrai")
+
+
+async def _read_rows(file: UploadFile):
+    import io
+    import pandas as pd
+    content = await file.read()
+    name = (file.filename or "").lower()
+    if name.endswith(".xlsx") or name.endswith(".xls"):
+        df = pd.read_excel(io.BytesIO(content), dtype=str)
+    else:
+        df = pd.read_csv(io.BytesIO(content), dtype=str)
+        if len(df.columns) <= 1:  # likely semicolon-separated
+            df = pd.read_csv(io.BytesIO(content), dtype=str, sep=";")
+    df = df.fillna("")
+    df.columns = [str(c).strip() for c in df.columns]
+    return df.to_dict("records")
+
+
+async def _upsert_cat(label, parent_id, level, image=None):
+    label = (label or "").strip()
+    if not label:
+        return None, False
+    doc = await db.categories.find_one({"label": label, "parent_id": parent_id})
+    if doc:
+        if image and not doc.get("image"):
+            await db.categories.update_one({"_id": doc["_id"]}, {"$set": {"image": image}})
+        return str(doc["_id"]), False
+    slug = slugify(label)
+    if await db.categories.find_one({"slug": slug}):
+        slug = f"{slug}-{uuid.uuid4().hex[:4]}"
+    order = await db.categories.count_documents({"parent_id": parent_id})
+    doc = {"slug": slug, "label": label, "icon": "Tag", "image": image or None,
+           "parent_id": parent_id, "level": level, "order": order,
+           "created_at": now_utc().isoformat()}
+    res = await db.categories.insert_one(doc)
+    return str(res.inserted_id), True
+
+
+@api.post("/admin/import/categories")
+async def import_categories(file: UploadFile = File(...), admin: dict = Depends(get_admin_user)):
+    try:
+        rows = await _read_rows(file)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Fichier illisible: {e}")
+    created = 0
+    errors = []
+    for i, row in enumerate(rows):
+        try:
+            main = _pick(row, "Catégorie", "Categorie", "Category", "Niveau 1", "main")
+            sub = _pick(row, "Sous-catégorie", "Sous-categorie", "Subcategory", "Niveau 2", "sub")
+            subsub = _pick(row, "Sous-sous-catégorie", "Sous-sous-categorie", "Niveau 3", "subsub")
+            img1 = _pick(row, "Image catégorie", "Image categorie", "Image 1")
+            img2 = _pick(row, "Image sous-catégorie", "Image sous-categorie", "Image 2")
+            img3 = _pick(row, "Image sous-sous-catégorie", "Image sous-sous-categorie", "Image 3")
+            if not main:
+                continue
+            mid, c1 = await _upsert_cat(main, None, 0, img1)
+            created += 1 if c1 else 0
+            if sub:
+                sid, c2 = await _upsert_cat(sub, mid, 1, img2)
+                created += 1 if c2 else 0
+                if subsub:
+                    _, c3 = await _upsert_cat(subsub, sid, 2, img3)
+                    created += 1 if c3 else 0
+        except Exception as e:
+            errors.append({"row": i + 2, "message": str(e)})
+    return {"created": created, "errors": errors}
+
+
+async def _resolve_path(path_str):
+    import re
+    labels = [p.strip() for p in re.split(r"[>/›|]", path_str or "") if p.strip()]
+    if not labels:
+        return None, "chemin de catégorie vide"
+    parent = None
+    node = None
+    for lab in labels:
+        node = await db.categories.find_one({"label": lab, "parent_id": parent})
+        if not node:
+            return None, f"catégorie introuvable dans le chemin: « {lab} »"
+        parent = str(node["_id"])
+    if await db.categories.count_documents({"parent_id": str(node["_id"])}) > 0:
+        return None, "le chemin doit pointer vers la catégorie la plus profonde (sans sous-catégorie)"
+    return node, None
+
+
+@api.post("/admin/import/products")
+async def import_products(file: UploadFile = File(...), admin: dict = Depends(get_admin_user)):
+    try:
+        rows = await _read_rows(file)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Fichier illisible: {e}")
+    created = 0
+    errors = []
+    for i, row in enumerate(rows):
+        try:
+            name = _pick(row, "Nom", "Name", "Produit")
+            if not name:
+                continue
+            path = _pick(row, "Chemin catégorie", "Chemin categorie", "Catégorie", "Categorie", "Category path", "category_path")
+            node, err = await _resolve_path(path)
+            if err:
+                errors.append({"row": i + 2, "message": f"« {name} » — {err}"})
+                continue
+            price_raw = _pick(row, "Prix", "Price").replace(" ", "").replace(",", ".")
+            old_raw = _pick(row, "Ancien prix", "Old price", "old_price").replace(" ", "").replace(",", ".")
+            stock_raw = _pick(row, "Stock", "Quantité", "Quantite")
+            doc = {
+                "name": name,
+                "brand": _pick(row, "Marque", "Brand"),
+                "category": node["slug"], "category_id": str(node["_id"]), "subcategory": None,
+                "description": _pick(row, "Description"),
+                "price": float(price_raw) if price_raw else 0.0,
+                "old_price": float(old_raw) if old_raw else None,
+                "stock": int(float(stock_raw)) if stock_raw else 0,
+                "images": [x for x in [_pick(row, "Image", "Image URL", "Photo")] if x],
+                "badge": _pick(row, "Badge") or None,
+                "is_featured": _truthy(_pick(row, "Coup de coeur", "Coup de cœur", "featured")),
+                "is_new": _truthy(_pick(row, "Nouveau", "Nouveauté", "new")),
+                "need": None,
+                "created_at": now_utc().isoformat(),
+            }
+            await db.products.insert_one(doc)
+            created += 1
+        except Exception as e:
+            errors.append({"row": i + 2, "message": str(e)})
+    return {"created": created, "errors": errors}
+
+
+def _make_file(columns, sample_rows, fmt):
+    import io
+    import pandas as pd
+    df = pd.DataFrame(sample_rows, columns=columns)
+    buf = io.BytesIO()
+    if fmt == "xlsx":
+        df.to_excel(buf, index=False, engine="openpyxl")
+        ct = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ext = "xlsx"
+    else:
+        buf.write("\ufeff".encode("utf-8"))  # BOM for Excel accents
+        buf.write(df.to_csv(index=False).encode("utf-8"))
+        ct = "text/csv; charset=utf-8"
+        ext = "csv"
+    buf.seek(0)
+    return buf.read(), ct, ext
+
+
+@api.get("/admin/import/template/categories")
+async def template_categories(format: str = "csv", admin: dict = Depends(get_admin_user)):
+    cols = ["Catégorie", "Sous-catégorie", "Sous-sous-catégorie",
+            "Image catégorie", "Image sous-catégorie", "Image sous-sous-catégorie"]
+    sample = [
+        ["Visage", "Soins Hydratants", "Crèmes de jour", "https://…/visage.jpg", "https://…/hydratant.jpg", "https://…/creme.jpg"],
+        ["Visage", "Soins Hydratants", "Sérums hydratants", "", "", ""],
+        ["Cheveux", "Shampooings", "Anti-chute", "", "", ""],
+    ]
+    data, ct, ext = _make_file(cols, sample, "xlsx" if format == "xlsx" else "csv")
+    return FastResponse(content=data, media_type=ct,
+                        headers={"Content-Disposition": f"attachment; filename=modele_categories.{ext}"})
+
+
+@api.get("/admin/import/template/products")
+async def template_products(format: str = "csv", admin: dict = Depends(get_admin_user)):
+    cols = ["Nom", "Marque", "Chemin catégorie", "Prix", "Ancien prix", "Stock",
+            "Description", "Image", "Badge", "Coup de coeur", "Nouveau"]
+    sample = [
+        ["CeraVe Crème Hydratante", "CeraVe", "Visage > Soins Hydratants > Crèmes de jour",
+         "2450", "2900", "40", "Crème hydratante visage", "https://…/produit.jpg", "PROMO", "oui", "non"],
+        ["Vichy Shampooing", "Vichy", "Cheveux > Shampooings > Anti-chute",
+         "2750", "", "30", "Shampooing anti-chute", "", "", "non", "oui"],
+    ]
+    data, ct, ext = _make_file(cols, sample, "xlsx" if format == "xlsx" else "csv")
+    return FastResponse(content=data, media_type=ct,
+                        headers={"Content-Disposition": f"attachment; filename=modele_produits.{ext}"})
+
 
 
 # Promo codes

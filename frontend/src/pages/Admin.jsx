@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { LayoutDashboard, Package, ShoppingBag, Tag, FileText, LogOut, Plus, Pencil, Trash2, X, Upload, TrendingUp, Users, Leaf, Settings, FolderTree, Ticket, Bell, Image as ImageIcon, UserCog, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Tag, FileText, LogOut, Plus, Pencil, Trash2, X, Upload, TrendingUp, Users, Leaf, Settings, FolderTree, Ticket, Bell, Image as ImageIcon, UserCog, ChevronRight, GripVertical, Download, FileSpreadsheet, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -159,6 +159,7 @@ function Dashboard() {
   const [promos, setPromos] = useState([]);
   const [notifs, setNotifs] = useState({ notifications: [], unread: 0 });
   const [editing, setEditing] = useState(null);
+  const [importKind, setImportKind] = useState(null);
   const [brandForm, setBrandForm] = useState(null);
   const [blogForm, setBlogForm] = useState(null);
 
@@ -228,7 +229,10 @@ function Dashboard() {
 
         {tab === "products" && (
           <div>
-            <button onClick={() => setEditing(emptyProduct)} data-testid="admin-add-product" className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-mint-600 text-white font-semibold text-sm mb-4"><Plus className="w-4 h-4" /> Ajouter un produit</button>
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button onClick={() => setEditing(emptyProduct)} data-testid="admin-add-product" className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-mint-600 text-white font-semibold text-sm"><Plus className="w-4 h-4" /> Ajouter un produit</button>
+              <button onClick={() => setImportKind("products")} data-testid="admin-import-products" className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white border border-mint-200 text-slate-700 font-semibold text-sm hover:border-mint-400"><Upload className="w-4 h-4" /> Importer (CSV / Excel)</button>
+            </div>
             <div className="bg-white rounded-2xl border border-slate-200/80 overflow-x-auto">
               <table className="w-full text-sm min-w-[520px]" data-testid="admin-products-table">
                 <thead className="bg-mint-50 text-slate-500 text-xs uppercase"><tr><th className="text-left p-3">Produit</th><th className="text-left p-3 hidden sm:table-cell">Catégorie</th><th className="text-left p-3">Prix</th><th className="text-left p-3">Stock</th><th className="p-3"></th></tr></thead>
@@ -288,7 +292,7 @@ function Dashboard() {
           </div>
         )}
 
-        {tab === "categories" && <CategoriesPanel categories={categories} onChanged={loadAll} />}
+        {tab === "categories" && <CategoriesPanel categories={categories} onChanged={loadAll} onImport={() => setImportKind("categories")} />}
         {tab === "promo" && <PromoPanel promos={promos} onChanged={loadAll} />}
 
         {tab === "blog" && (
@@ -312,6 +316,7 @@ function Dashboard() {
       </div>
 
       {editing && <ProductForm product={editing.id ? editing : null} brands={brands} categories={categories} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); loadAll(); }} />}
+      {importKind && <ImportModal kind={importKind} onClose={() => setImportKind(null)} onDone={loadAll} />}
       {brandForm && <BrandForm brand={brandForm} onClose={() => setBrandForm(null)} onSaved={() => { setBrandForm(null); loadAll(); }} />}
       {blogForm && <BlogForm post={blogForm} onClose={() => setBlogForm(null)} onSaved={() => { setBlogForm(null); loadAll(); }} />}
     </div>
@@ -356,17 +361,97 @@ function CustomersPanel({ customers }) {
   );
 }
 
-function CategoriesPanel({ categories, onChanged }) {
+function ImportModal({ kind, onClose, onDone }) {
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const ref = useRef();
+  const label = kind === "categories" ? "catégories" : "produits";
+  const dl = async (fmt) => {
+    try {
+      const { data } = await api.get(`/admin/import/template/${kind}?format=${fmt}`, { responseType: "blob" });
+      const url = URL.createObjectURL(data);
+      const a = document.createElement("a"); a.href = url; a.download = `modele_${kind}.${fmt}`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { toast.error("Échec du téléchargement du modèle"); }
+  };
+  const upload = async () => {
+    if (!file) { toast.error("Choisissez un fichier"); return; }
+    setBusy(true); setResult(null);
+    const fd = new FormData(); fd.append("file", file);
+    try {
+      const { data } = await api.post(`/admin/import/${kind}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setResult(data);
+      toast.success(`${data.created} ${label} importé(s)`);
+      onDone();
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Modal title={`Importer des ${label}`} onClose={onClose}>
+      <div className="space-y-4">
+        <div className="bg-mint-50/60 rounded-xl p-4 text-sm text-slate-600">
+          <p className="font-semibold text-slate-dark mb-1">1. Téléchargez le modèle</p>
+          <p className="mb-3">Remplissez le fichier avec vos données puis importez-le ci-dessous.</p>
+          <div className="flex gap-2">
+            <button onClick={() => dl("csv")} data-testid="import-template-csv" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-mint-200 text-sm font-medium hover:border-mint-400"><Download className="w-4 h-4" /> Modèle CSV</button>
+            <button onClick={() => dl("xlsx")} data-testid="import-template-xlsx" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-mint-200 text-sm font-medium hover:border-mint-400"><FileSpreadsheet className="w-4 h-4" /> Modèle Excel</button>
+          </div>
+        </div>
+        <div>
+          <p className="font-semibold text-slate-dark text-sm mb-2">2. Importez votre fichier (.csv, .xlsx)</p>
+          <input ref={ref} type="file" accept=".csv,.xlsx,.xls" onChange={(e) => setFile(e.target.files[0])} data-testid="import-file-input" className="hidden" />
+          <div className="flex items-center gap-3 flex-wrap">
+            <button type="button" onClick={() => ref.current.click()} className="flex items-center gap-2 px-4 py-2 rounded-xl border border-mint-200 text-sm font-medium hover:border-mint-400"><Upload className="w-4 h-4" /> Choisir un fichier</button>
+            {file && <span className="text-sm text-slate-500 truncate max-w-[180px]">{file.name}</span>}
+          </div>
+        </div>
+        {result && (
+          <div className="rounded-xl border border-slate-200 p-3 text-sm max-h-48 overflow-auto" data-testid="import-result">
+            <p className="font-semibold text-mint-700">{result.created} {label} importé(s)</p>
+            {result.errors && result.errors.length > 0 && (
+              <div className="mt-2 space-y-1">
+                <p className="font-semibold text-red-500 flex items-center gap-1"><AlertCircle className="w-4 h-4" /> {result.errors.length} ligne(s) ignorée(s) :</p>
+                {result.errors.map((er, i) => <p key={i} className="text-xs text-red-500">Ligne {er.row} : {er.message}</p>)}
+              </div>
+            )}
+          </div>
+        )}
+        <button onClick={upload} disabled={busy} data-testid="import-submit" className="w-full py-3 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold disabled:opacity-60">{busy ? "Import en cours…" : "Importer"}</button>
+      </div>
+    </Modal>
+  );
+}
+
+function CategoriesPanel({ categories, onChanged, onImport }) {
+  const { refresh, findById } = useCategories();
   const [form, setForm] = useState(null);
   const [expanded, setExpanded] = useState({});
+  const [dragId, setDragId] = useState(null);
+  const [overId, setOverId] = useState(null);
   const toggle = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
   const del = async (node) => {
     if (!confirm(`Supprimer « ${node.label} » et toutes ses sous-catégories ?`)) return;
     await api.delete(`/categories/${node.id}`); onChanged(); toast.success("Supprimée");
   };
-  const addRoot = () => setForm({ label: "", image: "", order: 100, parent_id: null, level: 0 });
-  const addChild = (parent) => setForm({ label: "", image: "", order: 100, parent_id: parent.id, level: parent.level + 1 });
-  const edit = (node) => setForm({ id: node.id, label: node.label, image: node.image || "", order: node.order, parent_id: node.parent_id, level: node.level });
+  const addRoot = () => setForm({ label: "", image: "", order: 100, parent_id: null, level: 0, banner_image: "", banner_title: "", banner_subtitle: "", banner_cta_label: "", banner_cta_link: "" });
+  const addChild = (parent) => setForm({ label: "", image: "", order: 100, parent_id: parent.id, level: parent.level + 1, banner_image: "", banner_title: "", banner_subtitle: "", banner_cta_label: "", banner_cta_link: "" });
+  const edit = (node) => setForm({ id: node.id, label: node.label, image: node.image || "", order: node.order, parent_id: node.parent_id, level: node.level, banner_image: node.banner_image || "", banner_title: node.banner_title || "", banner_subtitle: node.banner_subtitle || "", banner_cta_label: node.banner_cta_label || "", banner_cta_link: node.banner_cta_link || "" });
+
+  const siblingsOf = (pid) => (pid ? (findById(pid)?.children || []) : categories);
+
+  const onDrop = async (target) => {
+    const dragged = dragId ? findById(dragId) : null;
+    setOverId(null);
+    if (!dragged || dragged.id === target.id || dragged.parent_id !== target.parent_id) { setDragId(null); return; }
+    const sibs = siblingsOf(target.parent_id).map((s) => s.id);
+    const from = sibs.indexOf(dragged.id), to = sibs.indexOf(target.id);
+    if (from < 0 || to < 0) { setDragId(null); return; }
+    sibs.splice(to, 0, sibs.splice(from, 1)[0]);
+    setDragId(null);
+    try { await api.put("/categories/reorder", { ids: sibs }); await refresh(); onChanged(); toast.success("Ordre mis à jour"); }
+    catch { toast.error("Échec du réordonnancement"); }
+  };
 
   const rows = [];
   const walk = (nodes) => (nodes || []).forEach((n) => { rows.push(n); if (expanded[n.id]) walk(n.children); });
@@ -374,18 +459,32 @@ function CategoriesPanel({ categories, onChanged }) {
 
   return (
     <div>
-      <button onClick={addRoot} data-testid="admin-add-category" className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-mint-600 text-white font-semibold text-sm mb-4"><Plus className="w-4 h-4" /> Ajouter une catégorie principale</button>
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button onClick={addRoot} data-testid="admin-add-category" className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-mint-600 text-white font-semibold text-sm"><Plus className="w-4 h-4" /> Ajouter une catégorie principale</button>
+        <button onClick={onImport} data-testid="admin-import-categories" className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white border border-mint-200 text-slate-700 font-semibold text-sm hover:border-mint-400"><Upload className="w-4 h-4" /> Importer (CSV / Excel)</button>
+      </div>
+      <p className="text-xs text-slate-400 mb-3 flex items-center gap-1"><GripVertical className="w-3.5 h-3.5" /> Glissez-déposez pour réordonner (au sein d'un même niveau)</p>
       <div className="space-y-1">
         {rows.map((node) => {
           const hasChildren = node.children && node.children.length > 0;
           const pad = node.level === 0 ? "" : node.level === 1 ? "ml-5" : "ml-10";
           return (
-            <div key={node.id} className={`${pad} flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200/80`} data-testid={`admin-cat-${node.id}`}>
+            <div key={node.id}
+              draggable
+              onDragStart={() => setDragId(node.id)}
+              onDragEnd={() => { setDragId(null); setOverId(null); }}
+              onDragOver={(e) => { e.preventDefault(); if (node.parent_id === (dragId ? findById(dragId)?.parent_id : null)) setOverId(node.id); }}
+              onDragLeave={() => setOverId((o) => (o === node.id ? null : o))}
+              onDrop={(e) => { e.preventDefault(); onDrop(node); }}
+              className={`${pad} flex items-center gap-2 p-3 bg-white rounded-xl border transition-colors ${overId === node.id ? "border-mint-500 bg-mint-50/50" : "border-slate-200/80"} ${dragId === node.id ? "opacity-50" : ""}`}
+              data-testid={`admin-cat-${node.id}`}>
+              <GripVertical className="w-4 h-4 text-slate-300 cursor-grab shrink-0" />
               {hasChildren ? (
                 <button onClick={() => toggle(node.id)} className="text-slate-400"><ChevronRight className={`w-4 h-4 transition-transform ${expanded[node.id] ? "rotate-90" : ""}`} /></button>
               ) : <span className="w-4" />}
               {node.image && <img src={mediaUrl(node.image)} alt="" className="w-9 h-9 rounded-lg object-cover" />}
               <span className="font-semibold flex-1 text-sm">{node.label}</span>
+              {node.level === 0 && (node.banner_title || node.banner_image) && <span className="text-[10px] font-mono-label px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 hidden sm:inline">Bannière</span>}
               <span className="text-[10px] font-mono-label px-2 py-0.5 rounded-full bg-mint-50 text-mint-700 hidden sm:inline">Niveau {node.level + 1}</span>
               {node.level < 2 && (
                 <button onClick={() => addChild(node)} data-testid={`admin-add-child-${node.id}`} className="text-mint-600 hover:text-mint-800" title="Ajouter une sous-catégorie"><Plus className="w-4 h-4" /></button>
@@ -403,10 +502,15 @@ function CategoriesPanel({ categories, onChanged }) {
 
 function CategoryForm({ cat, onClose, onSaved }) {
   const [f, setF] = useState(cat);
+  const setV = (k, v) => setF((p) => ({ ...p, [k]: v }));
   const titleLevel = ["catégorie principale", "sous-catégorie", "sous-sous-catégorie"][f.level] || "catégorie";
   const save = async () => {
     if (!f.label) { toast.error("Nom requis"); return; }
-    const payload = { label: f.label, icon: "Tag", image: f.image || null, order: Number(f.order) || 100, parent_id: f.parent_id || null };
+    const payload = {
+      label: f.label, icon: "Tag", image: f.image || null, order: Number(f.order) || 100, parent_id: f.parent_id || null,
+      banner_image: f.banner_image || null, banner_title: f.banner_title || null, banner_subtitle: f.banner_subtitle || null,
+      banner_cta_label: f.banner_cta_label || null, banner_cta_link: f.banner_cta_link || null,
+    };
     try {
       if (f.id) await api.put(`/categories/${f.id}`, payload); else await api.post("/categories", payload);
       toast.success("Catégorie enregistrée"); onSaved();
@@ -414,9 +518,21 @@ function CategoryForm({ cat, onClose, onSaved }) {
   };
   return (
     <Modal title={f.id ? `Modifier la ${titleLevel}` : `Nouvelle ${titleLevel}`} onClose={onClose}>
-      <L label="Nom"><input value={f.label} onChange={(e) => setF({ ...f, label: e.target.value })} data-testid="cf-label" className={inp} /></L>
-      <L label="Ordre d'affichage"><input type="number" value={f.order} onChange={(e) => setF({ ...f, order: e.target.value })} className={inp} /></L>
-      <L label="Image"><ImageUpload value={f.image} onChange={(url) => setF({ ...f, image: url })} /></L>
+      <L label="Nom"><input value={f.label} onChange={(e) => setV("label", e.target.value)} data-testid="cf-label" className={inp} /></L>
+      <L label="Ordre d'affichage"><input type="number" value={f.order} onChange={(e) => setV("order", e.target.value)} className={inp} /></L>
+      <L label="Image (carte)"><ImageUpload value={f.image} onChange={(url) => setV("image", url)} /></L>
+      {f.level === 0 && (
+        <div className="mt-2 pt-3 border-t border-mint-100 space-y-3">
+          <p className="text-sm font-display font-bold text-slate-dark">Bannière de la page catégorie</p>
+          <L label="Image de bannière"><ImageUpload value={f.banner_image} onChange={(url) => setV("banner_image", url)} /></L>
+          <L label="Titre"><input value={f.banner_title} onChange={(e) => setV("banner_title", e.target.value)} data-testid="cf-banner-title" placeholder="ex: Soins du visage" className={inp} /></L>
+          <L label="Sous-titre"><input value={f.banner_subtitle} onChange={(e) => setV("banner_subtitle", e.target.value)} placeholder="ex: Jusqu'à -30% cette semaine" className={inp} /></L>
+          <div className="grid grid-cols-2 gap-3">
+            <L label="Texte du bouton"><input value={f.banner_cta_label} onChange={(e) => setV("banner_cta_label", e.target.value)} placeholder="ex: Voir les promos" className={inp} /></L>
+            <L label="Lien du bouton"><input value={f.banner_cta_link} onChange={(e) => setV("banner_cta_link", e.target.value)} placeholder="ex: /catalogue?on_promo=1" className={inp} /></L>
+          </div>
+        </div>
+      )}
       <button onClick={save} data-testid="cf-save" className="w-full py-3 rounded-full bg-mint-600 text-white font-semibold">Enregistrer</button>
     </Modal>
   );
