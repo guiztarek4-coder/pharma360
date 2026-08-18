@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { LayoutDashboard, Package, ShoppingBag, Tag, FileText, LogOut, Plus, Pencil, Trash2, X, Upload, TrendingUp, Users, Leaf, Settings, FolderTree, Ticket, Bell, Image as ImageIcon, UserCog, ChevronRight, GripVertical, Download, FileSpreadsheet, AlertCircle } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Tag, FileText, LogOut, Plus, Pencil, Trash2, X, Upload, TrendingUp, Users, Leaf, Settings, FolderTree, Ticket, Bell, Image as ImageIcon, UserCog, ChevronRight, GripVertical, Download, FileSpreadsheet, AlertCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -160,6 +160,7 @@ function Dashboard() {
   const [notifs, setNotifs] = useState({ notifications: [], unread: 0 });
   const [editing, setEditing] = useState(null);
   const [importKind, setImportKind] = useState(null);
+  const [lowOnly, setLowOnly] = useState(false);
   const [brandForm, setBrandForm] = useState(null);
   const [blogForm, setBlogForm] = useState(null);
 
@@ -211,6 +212,7 @@ function Dashboard() {
               className={`relative flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap ${tab === t.id ? "bg-mint-600 text-white" : "bg-white border border-mint-200 text-slate-600"}`}>
               <t.icon className="w-4 h-4" /> {t.label}
               {t.id === "notifications" && notifs.unread > 0 && <span className="ml-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] grid place-items-center">{notifs.unread}</span>}
+              {t.id === "products" && stats?.low_stock > 0 && <span data-testid="products-low-stock-badge" className={`ml-1 w-5 h-5 rounded-full text-[10px] grid place-items-center ${tab === t.id ? "bg-white/25 text-white" : "bg-red-500 text-white"}`}>{stats.low_stock}</span>}
             </button>
           ))}
         </div>
@@ -224,36 +226,54 @@ function Dashboard() {
                 <div className="text-sm text-slate-500">{label}</div>
               </div>
             ))}
+            <button onClick={() => { setLowOnly(true); setTab("products"); }} data-testid="stat-low-stock"
+              className={`text-left rounded-2xl border p-5 transition-colors ${stats.low_stock > 0 ? "bg-red-50 border-red-200 hover:border-red-400" : "bg-white border-slate-200/80"}`}>
+              <AlertTriangle className={`w-5 h-5 mb-3 ${stats.low_stock > 0 ? "text-red-500" : "text-mint-600"}`} />
+              <div className={`font-display font-extrabold text-2xl ${stats.low_stock > 0 ? "text-red-600" : ""}`}>{stats.low_stock ?? 0}</div>
+              <div className="text-sm text-slate-500">Stock bas (≤ {stats.low_stock_threshold ?? 5})</div>
+            </button>
           </div>
         )}
 
-        {tab === "products" && (
+        {tab === "products" && (() => {
+          const threshold = stats?.low_stock_threshold ?? 5;
+          const lowCount = products.filter((p) => p.stock <= threshold).length;
+          const shown = lowOnly ? products.filter((p) => p.stock <= threshold) : products;
+          return (
           <div>
             <div className="flex flex-wrap gap-2 mb-4">
               <button onClick={() => setEditing(emptyProduct)} data-testid="admin-add-product" className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-mint-600 text-white font-semibold text-sm"><Plus className="w-4 h-4" /> Ajouter un produit</button>
               <button onClick={() => setImportKind("products")} data-testid="admin-import-products" className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white border border-mint-200 text-slate-700 font-semibold text-sm hover:border-mint-400"><Upload className="w-4 h-4" /> Importer (CSV / Excel)</button>
+              <button onClick={() => setLowOnly(!lowOnly)} data-testid="admin-filter-low-stock"
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-sm border ${lowOnly ? "bg-red-500 text-white border-red-500" : "bg-white border-mint-200 text-slate-700 hover:border-red-300"}`}>
+                <AlertTriangle className="w-4 h-4" /> Stock bas {lowCount > 0 && <span className={`ml-1 px-1.5 rounded-full text-[10px] ${lowOnly ? "bg-white/25" : "bg-red-100 text-red-600"}`}>{lowCount}</span>}
+              </button>
             </div>
             <div className="bg-white rounded-2xl border border-slate-200/80 overflow-x-auto">
               <table className="w-full text-sm min-w-[520px]" data-testid="admin-products-table">
                 <thead className="bg-mint-50 text-slate-500 text-xs uppercase"><tr><th className="text-left p-3">Produit</th><th className="text-left p-3 hidden sm:table-cell">Catégorie</th><th className="text-left p-3">Prix</th><th className="text-left p-3">Stock</th><th className="p-3"></th></tr></thead>
                 <tbody>
-                  {products.map((p) => (
-                    <tr key={p.id} className="border-t border-mint-50">
+                  {shown.map((p) => {
+                    const low = p.stock <= threshold;
+                    return (
+                    <tr key={p.id} className={`border-t border-mint-50 ${low ? "bg-red-50/50" : ""}`}>
                       <td className="p-3"><div className="flex items-center gap-2"><img src={mediaUrl(p.images?.[0])} alt="" className="w-9 h-9 rounded-lg object-cover bg-mint-50" /><span className="font-medium line-clamp-1">{p.name}</span></div></td>
                       <td className="p-3 hidden sm:table-cell capitalize text-slate-500">{p.category}</td>
                       <td className="p-3 font-semibold text-mint-700 whitespace-nowrap">{formatDA(p.price)}</td>
-                      <td className="p-3">{p.stock}</td>
+                      <td className="p-3">{low ? <span className="inline-flex items-center gap-1 text-red-600 font-semibold" data-testid={`low-stock-${p.id}`}><AlertTriangle className="w-3.5 h-3.5" /> {p.stock}</span> : p.stock}</td>
                       <td className="p-3 text-right whitespace-nowrap">
                         <button onClick={() => setEditing(p)} data-testid={`admin-edit-${p.id}`} className="text-slate-400 hover:text-mint-700 mr-2"><Pencil className="w-4 h-4" /></button>
                         <button onClick={() => delProduct(p.id)} data-testid={`admin-del-${p.id}`} className="text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {tab === "orders" && (
           <div className="space-y-3">
@@ -749,6 +769,9 @@ function SettingsPanel() {
           <L label="Frais par défaut (DA)"><input type="number" value={f.delivery_fee} onChange={(e) => set("delivery_fee", Number(e.target.value))} data-testid="set-delivery" className={inp} /></L>
           <L label="Frais point relais (DA)"><input type="number" value={f.relais_fee} onChange={(e) => set("relais_fee", Number(e.target.value))} className={inp} /></L>
           <L label="Zone"><input value={f.delivery_zone} onChange={(e) => set("delivery_zone", e.target.value)} className={inp} /></L>
+        </div>
+        <div className="grid sm:grid-cols-3 gap-3 mt-3">
+          <L label="Seuil d'alerte stock bas"><input type="number" min="0" value={f.low_stock_threshold ?? 5} onChange={(e) => set("low_stock_threshold", Number(e.target.value))} data-testid="set-low-stock-threshold" className={inp} /></L>
         </div>
         <div className="flex flex-wrap gap-5 mt-3">
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.pickup_enabled} onChange={(e) => set("pickup_enabled", e.target.checked)} className="accent-mint-600 w-4 h-4" /> Retrait pharmacie</label>

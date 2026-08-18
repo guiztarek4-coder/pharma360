@@ -52,6 +52,7 @@ export default function Catalog() {
   const featured = params.get("featured") || "";
   const sort = params.get("sort") || "recent";
   const maxPrice = params.get("max_price") || "";
+  const filterCatId = params.get("category_id") || "";
 
   const node = categoryId ? findById(categoryId) : null;
   const isDrilldown = !!categoryId;
@@ -68,6 +69,7 @@ export default function Catalog() {
     setLoading(true);
     const qs = new URLSearchParams();
     if (isDrilldown && node) qs.set("category_id", node.id);
+    else if (filterCatId) qs.set("category_id", filterCatId);
     if (brand) qs.set("brand", brand);
     if (search) qs.set("search", search);
     if (onPromo) qs.set("on_promo", "true");
@@ -76,7 +78,7 @@ export default function Catalog() {
     if (sort) qs.set("sort", sort);
     if (maxPrice) qs.set("max_price", maxPrice);
     api.get(`/products?${qs.toString()}`).then((r) => { setProducts(r.data); setLoading(false); });
-  }, [categoryId, node?.id, hasChildren, brand, search, onPromo, isNew, featured, sort, maxPrice]);
+  }, [categoryId, node?.id, hasChildren, filterCatId, brand, search, onPromo, isNew, featured, sort, maxPrice]);
 
   const update = (key, value) => {
     const next = new URLSearchParams(params);
@@ -84,7 +86,8 @@ export default function Catalog() {
     setParams(next);
   };
 
-  const title = node?.label || (search ? `Recherche : "${search}"` : onPromo ? "Promotions" : isNew ? "Nouveautés" : featured ? "Coups de cœur" : brand || "Catalogue");
+  const filterCatLabel = filterCatId ? findById(filterCatId)?.label : "";
+  const title = node?.label || (search ? `Recherche : "${search}"${filterCatLabel ? ` · ${filterCatLabel}` : ""}` : filterCatLabel || (onPromo ? "Promotions" : isNew ? "Nouveautés" : featured ? "Coups de cœur" : brand || "Catalogue"));
 
   const Filters = () => (
     <div className="space-y-6">

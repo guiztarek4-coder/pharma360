@@ -28,9 +28,11 @@ const Logo = ({ settings }) => (
 
 function SearchBar({ mobile }) {
   const [q, setQ] = useState("");
+  const [cat, setCat] = useState("");
   const [sug, setSug] = useState(null);
   const [focused, setFocused] = useState(false);
   const navigate = useNavigate();
+  const { categories } = useCategories();
 
   useEffect(() => {
     if (q.length < 2) { setSug(null); return; }
@@ -45,23 +47,33 @@ function SearchBar({ mobile }) {
 
   const submit = (e) => {
     e.preventDefault();
-    if (q.trim()) { navigate(`/catalogue?search=${encodeURIComponent(q)}`); setFocused(false); }
+    const params = new URLSearchParams();
+    if (q.trim()) params.set("search", q.trim());
+    if (cat) params.set("category_id", cat);
+    if (params.toString()) { navigate(`/catalogue?${params.toString()}`); setFocused(false); }
   };
 
   return (
     <div className={`relative ${mobile ? "w-full" : "flex-1 max-w-xl"}`}>
       <form onSubmit={submit}>
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            data-testid="header-search-input"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setTimeout(() => setFocused(false), 200)}
-            placeholder="Rechercher un produit, une marque..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-full border border-mint-100 bg-mint-50/60 text-sm outline-none focus:ring-2 focus:ring-mint-500 focus:bg-white transition-all"
-          />
+        <div className="relative flex items-stretch rounded-full border border-mint-100 bg-mint-50/60 focus-within:ring-2 focus-within:ring-mint-500 focus-within:bg-white transition-all overflow-hidden">
+          <select value={cat} onChange={(e) => setCat(e.target.value)} data-testid="header-search-category"
+            className="hidden sm:block max-w-[140px] pl-3 pr-1 bg-transparent text-sm text-slate-600 outline-none border-r border-mint-100 cursor-pointer">
+            <option value="">Toutes catég.</option>
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+          </select>
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              data-testid="header-search-input"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setTimeout(() => setFocused(false), 200)}
+              placeholder="Rechercher un produit, une marque..."
+              className="w-full pl-10 pr-4 py-2.5 bg-transparent text-sm outline-none"
+            />
+          </div>
         </div>
       </form>
       {focused && sug && (sug.products.length > 0 || sug.brands.length > 0) && (

@@ -62,6 +62,13 @@ Site e-commerce de parapharmacie "Pharma360" basé en Algérie, inspiré de phar
 - **Fil d'ariane produit complet** sur la fiche produit (Accueil > Principale > Sous > Sous-sous > Produit).
 - Tests : backend 13/13, flux frontend 100%.
 
+## Implemented (2026-08-18 — iteration 8)
+- **Recherche par catégorie** : menu déroulant (catégories principales) dans la barre de recherche → `/catalogue?search=&category_id=`. Le filtre `category_id` couvre désormais tout le sous-arbre (`_descendant_ids` + `$in`), donc filtrer par une catégorie principale retourne tous les produits de la section.
+- **Produits similaires** : la fiche produit affiche des produits de la **même sous-catégorie** (parent de la feuille) pour le cross-selling. Correction d'une race condition (l'arbre de catégories doit être chargé avant de calculer le chemin).
+- **Fil d'ariane produit** complet vérifié (Accueil › Principale › Sous › Sous-sous › Produit).
+- **Suivi des stocks bas** : seuil global réglable dans Paramètres (`low_stock_threshold`, défaut 5) ; carte "Stock bas" sur le tableau de bord (rouge, cliquable) ; badge rouge sur l'onglet Produits ; filtre "Stock bas" ; lignes en rouge ; endpoints `GET /api/admin/stats` (low_stock) et `GET /api/admin/low-stock`.
+- Tests : backend 6/6 ; frontend vérifié (race condition corrigée, libellé "Produits similaires").
+
 ## Known Limitations / MOCKED
 - Paiement en ligne par carte (CIB/Edahabia) = **SIMULÉ (démo)**. Stripe ne supporte pas l'Algérie (DZ), donc pas de passerelle réelle. La commande carte est marquée "payée" sans transaction réelle.
 - Email de notification de commande = **inactif tant que RESEND_API_KEY n'est pas configuré** (la notification in-app fonctionne).

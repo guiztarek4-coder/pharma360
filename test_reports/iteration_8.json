@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 8 (category-scoped search + low-stock alerts) tested end-to-end. Backend: 6/6 pytest tests pass — category_id now expands to full subtree ($in) so a MAIN id returns all leaf products; scoped search (category_id + search) stays within subtree; /api/admin/stats returns low_stock + low_stock_threshold; /api/admin/low-stock returns {threshold, products[]} sorted asc; PUT /api/settings low_stock_threshold persists and recomputes low_stock. Frontend: header search dropdown (header-search-category) lists 'Toutes catég.' + 13 mains, empty search with category still navigates to /catalogue?category_id=..., catalog title reflects the category label (e.g. 'Recherche : \"crème\" · Visage'). Admin dashboard shows stat-low-stock card (red '1 Stock bas (≤ 5)'), clicking it opens Produits pre-filtered; products-low-stock-badge shows count on Produits tab; admin-filter-low-stock toggle filters table; low-stock-{id} row markers render. Settings set-low-stock-threshold input saves via 'Enregistrer les paramètres' and stats recompute (verified 5→15→5 round-trip). Baseline verified restored: 13 mains / 104 products / low_stock=0.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ProductDetail related products", "issue": "Section title is 'Vous aimerez aussi' but the review request specifies 'Produits similaires'. Minor label mismatch — code at /app/frontend/src/pages/ProductDetail.jsx:187.", "selector": "h2:has-text('Vous aimerez aussi')", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "ProductDetail → related products (sub-category)", "issue": "Race condition: ProductDetail's useEffect computes the sub-category scope via getAncestors(category_id) *immediately* on mount, but the CategoriesContext still loads /api/categories asynchronously. On a hard reload of /produit/{id}, categories are empty at that moment → getAncestors returns [] → scope falls back to the LEAF category id → related products only include the exact leaf's siblings (in our test case: Eucerin Bandages Advanced showed only 1 related product instead of 3 that share the Orthopédie sub-category). Fix: either await categories readiness (e.g. also depend on categories/flat in the useEffect deps and refetch related once available) or ask the backend for the parent category server-side.", "affected_selectors": ["h2:has-text('Vous aimerez aussi')"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration8_search_lowstock.py",
+    "/app/test_reports/pytest/iter8.xml"
+  ],
+  "action_items": [
+    "Fix ProductDetail related-products race: recompute scope once CategoriesContext.flat is populated (add categories to useEffect deps, or resolve ancestors server-side).",
+    "(Spec alignment) Rename related section heading from 'Vous aimerez aussi' to 'Produits similaires' if the intent per the review_request is that exact label."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1609 lines — refactor into routers still overdue (>700-line guideline).",
+    "GET /api/admin/low-stock has no limit query param and hard-codes .to_list(500); fine at current scale but should paginate for growth.",
+    "PUT /api/products/{id} requires the FULL product body (name+price+stock+…). This makes partial updates (like just changing stock) awkward for API consumers — consider PATCH or making body fields optional. The admin UI works around it by sending the whole product on save.",
+    "CategoriesContext.getAncestors is a stale-closure hazard when called inside effects that don't depend on `flat` (see ProductDetail bug). Either memoize/expose a ready flag, or resolve category paths on the backend.",
+    "Related-products endpoint reuse of GET /products?category_id= is fine, but the frontend does the excluding-current-item locally with .slice(0,4); the API supports limit=9 then trims — small waste of bandwidth, ok."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration8_search_lowstock.py"],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "90% — 1 integration bug (related-products race), 1 label mismatch"},
+  "test_credentials": "admin: pharmacie360benak@gmail.com / Aminetarek1992*",
+  "seed_data_creation": "None persisted. During the run one product (Eucerin Bandages Advanced, 6a8399a0fd8830baee58e7a4) had its stock temporarily set to 2 and then restored to 30. Final baseline: GET /api/categories = 13 mains, GET /api/products = 104, GET /api/admin/stats low_stock = 0, low_stock_threshold = 5.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "New endpoints: GET /api/admin/low-stock (admin, returns {threshold, products[] sorted asc}); admin_stats now includes low_stock + low_stock_threshold. GET /api/products?category_id= expands to the whole subtree via _descendant_ids() -> $in query (works for main, sub, or leaf ids). DEFAULT_SETTINGS.low_stock_threshold=5. Frontend testids added this iteration: header-search-category (present twice in DOM: desktop + mobile — use .first when locating), stat-low-stock, products-low-stock-badge, admin-filter-low-stock, low-stock-{id}, set-low-stock-threshold. Related-products race condition still open (see integration_issues).",
+  "rca of the issue": "Related-products race: ProductDetail.jsx:89-101 useEffect depends only on [id]. It calls getAncestors(category_id) from CategoriesContext, but CategoriesContext.refresh() runs its own useEffect on mount and populates categories asynchronously. On a fresh navigation to /produit/{id}, both effects mount concurrently and the product effect wins the race → getAncestors returns [] because `flat` is still []. Consequence: `scope` falls back to r.data.category_id (the leaf), and the related API returns only the leaf's own products. Reproduction: hard refresh of /produit/6a8399a0fd8830baee58e7a4 → Orthopédie has 4 products (across Bandages+Attelles leaves), sub-category-scoped API returns 4, related list should show 3, actual = 1. Mitigation: (a) add `flat` (or `categories`) to the useEffect dep array and re-issue the related fetch once ancestors resolve; or (b) return category ancestry/parent in GET /api/products/{id} response so the frontend doesn't need the context to be ready."
+}

@@ -426,6 +426,19 @@ async def delete_address(addr_id: str, user: dict = Depends(get_current_user)):
 # ----------------------------------------------------------------------------
 # Product routes
 # ----------------------------------------------------------------------------
+async def _descendant_ids(cat_id: str):
+    """Return the category id plus all descendant ids (as strings)."""
+    ids = [cat_id]
+    frontier = [cat_id]
+    while frontier:
+        children = await db.categories.find({"parent_id": {"$in": frontier}}).to_list(2000)
+        cids = [str(c["_id"]) for c in children]
+        ids.extend(cids)
+        frontier = cids
+    return ids
+
+
+
 @api.get("/products")
 async def list_products(
     category: Optional[str] = None,
@@ -446,7 +459,8 @@ async def list_products(
     if category:
         q["category"] = category
     if category_id:
-        q["category_id"] = category_id
+        ids = await _descendant_ids(category_id)
+        q["category_id"] = {"$in": ids} if len(ids) > 1 else category_id
     if subcategory:
         q["subcategory"] = subcategory
     if brand:
@@ -1146,6 +1160,8 @@ async def admin_stats(admin: dict = Depends(get_admin_user)):
     agg = await db.orders.aggregate([{"$group": {"_id": None, "total": {"$sum": "$total"}, "count": {"$sum": 1}}}]).to_list(1)
     revenue = agg[0]["total"] if agg else 0
     orders_count = agg[0]["count"] if agg else 0
+    settings = await db.settings.find_one({"_id": "site"}) or {}
+    threshold = settings.get("low_stock_threshold", 5)
     return {
         "products": await db.products.count_documents({}),
         "orders": orders_count,
@@ -1153,7 +1169,17 @@ async def admin_stats(admin: dict = Depends(get_admin_user)):
         "revenue": revenue,
         "pending_orders": await db.orders.count_documents({"status": "En attente"}),
         "customers": await db.users.count_documents({"role": "customer"}),
+        "low_stock": await db.products.count_documents({"stock": {"$lte": threshold}}),
+        "low_stock_threshold": threshold,
     }
+
+
+@api.get("/admin/low-stock")
+async def admin_low_stock(admin: dict = Depends(get_admin_user)):
+    settings = await db.settings.find_one({"_id": "site"}) or {}
+    threshold = settings.get("low_stock_threshold", 5)
+    cursor = db.products.find({"stock": {"$lte": threshold}}).sort("stock", 1)
+    return {"threshold": threshold, "products": [clean(d) for d in await cursor.to_list(500)]}
 
 
 # ----------------------------------------------------------------------------
@@ -1323,6 +1349,7 @@ DEFAULT_SETTINGS = {
     "tiktok": "#",
     "delivery_zone": "Toutes les wilayas d'Algérie",
     "delivery_fee": 500,
+    "low_stock_threshold": 5,
     "relais_fee": 350,
     "delivery_fees": {},
     "pickup_enabled": True,

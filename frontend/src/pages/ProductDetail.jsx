@@ -80,7 +80,7 @@ function Reviews({ productId }) {
 export default function ProductDetail() {
   const { id } = useParams();
   const { addItem } = useCart();
-  const { getAncestors } = useCategories();
+  const { getAncestors, flat } = useCategories();
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
   const [qty, setQty] = useState(1);
@@ -89,14 +89,19 @@ export default function ProductDetail() {
   useEffect(() => {
     window.scrollTo(0, 0);
     setQty(1);
-    api.get(`/products/${id}`).then((r) => {
-      setProduct(r.data);
-      setActiveImg(0);
-      const cid = r.data.category_id;
-      const url = cid ? `/products?category_id=${cid}&limit=5` : `/products?category=${r.data.category}&limit=5`;
-      api.get(url).then((rr) => setRelated(rr.data.filter((p) => p.id !== id).slice(0, 4)));
-    });
+    setRelated([]);
+    api.get(`/products/${id}`).then((r) => { setProduct(r.data); setActiveImg(0); });
   }, [id]);
+
+  // Fetch related products once BOTH the product and the category tree are ready
+  useEffect(() => {
+    if (!product) return;
+    const path = product.category_id ? getAncestors(product.category_id) : [];
+    // Prefer the sub-category (parent of the leaf) to surface siblings across the section
+    const scope = path.length >= 2 ? path[path.length - 2].id : product.category_id;
+    const url = scope ? `/products?category_id=${scope}&limit=12` : `/products?category=${product.category}&limit=12`;
+    api.get(url).then((rr) => setRelated(rr.data.filter((p) => p.id !== product.id).slice(0, 4)));
+  }, [product, flat]);
 
   if (!product) return <div className="max-w-7xl mx-auto px-6 py-20 text-center text-slate-400">Chargement…</div>;
 
@@ -181,8 +186,8 @@ export default function ProductDetail() {
       <Reviews productId={id} />
 
       {related.length > 0 && (
-        <section className="mt-16">
-          <h2 className="font-display font-extrabold text-2xl text-slate-dark mb-6">Vous aimerez aussi</h2>
+        <section className="mt-16" data-testid="related-products">
+          <h2 className="font-display font-extrabold text-2xl text-slate-dark mb-6">Produits similaires</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-5">
             {related.map((p) => <ProductCard key={p.id} product={p} />)}
           </div>
