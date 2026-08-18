@@ -57,7 +57,56 @@ function ImageUpload({ value, onChange }) {
   );
 }
 
-const emptyProduct = { name: "", brand: "", category: "", category_id: "", subcategory: "", description: "", price: 0, old_price: null, stock: 0, images: [], badge: "", is_featured: false, is_new: false, need: "" };
+const emptyProduct = { name: "", brand: "", category: "", category_id: "", subcategory: "", description: "", price: 0, old_price: null, stock: 0, images: [], badge: "", is_featured: false, is_new: false, need: "", complementary_ids: [] };
+
+function ComplementarySelector({ value, onChange }) {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState([]);
+  const [selected, setSelected] = useState([]);
+  const ids = value || [];
+
+  useEffect(() => {
+    if (ids.length === 0) { setSelected([]); return; }
+    Promise.all(ids.map((id) => api.get(`/products/${id}`).then((r) => r.data).catch(() => null)))
+      .then((arr) => setSelected(arr.filter(Boolean)));
+  }, [JSON.stringify(ids)]);
+
+  useEffect(() => {
+    if (q.length < 2) { setResults([]); return; }
+    const t = setTimeout(() => { api.get(`/products?search=${encodeURIComponent(q)}&limit=8`).then((r) => setResults(r.data)); }, 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const add = (p) => { if (!ids.includes(p.id)) onChange([...ids, p.id]); setQ(""); setResults([]); };
+  const remove = (id) => onChange(ids.filter((x) => x !== id));
+
+  return (
+    <div>
+      <div className="flex flex-wrap gap-2 mb-2">
+        {selected.map((p) => (
+          <span key={p.id} data-testid={`pf-comp-chip-${p.id}`} className="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-full bg-mint-100 text-mint-800 text-xs font-medium">
+            {p.name}
+            <button type="button" onClick={() => remove(p.id)} className="w-4 h-4 rounded-full bg-white/60 grid place-items-center hover:bg-white"><X className="w-3 h-3" /></button>
+          </span>
+        ))}
+        {selected.length === 0 && <span className="text-xs text-slate-400">Aucun produit complémentaire</span>}
+      </div>
+      <div className="relative">
+        <input value={q} onChange={(e) => setQ(e.target.value)} data-testid="pf-comp-search" placeholder="Rechercher un produit à associer…" className={inp} />
+        {results.length > 0 && (
+          <div className="absolute z-10 left-0 right-0 mt-1 bg-white rounded-xl border border-mint-100 shadow-lg max-h-52 overflow-auto">
+            {results.map((p) => (
+              <button type="button" key={p.id} onClick={() => add(p)} data-testid={`pf-comp-result-${p.id}`} className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-mint-50">
+                <img src={mediaUrl(p.images?.[0])} alt="" className="w-8 h-8 rounded object-cover bg-mint-50" />
+                <span className="line-clamp-1">{p.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function CategoryPathSelector({ value, onChange }) {
   const { categories, findById, getAncestors } = useCategories();
@@ -95,7 +144,7 @@ function ProductForm({ product, brands, categories, onClose, onSaved }) {
     const leaf = f.category_id ? findById(f.category_id) : null;
     if (!f.category_id || !leaf) { toast.error("Choisissez une catégorie"); return; }
     if (leaf.children && leaf.children.length > 0) { toast.error("Choisissez la catégorie la plus profonde (sans sous-catégorie)"); return; }
-    const payload = { ...f, price: Number(f.price), old_price: f.old_price ? Number(f.old_price) : null, stock: Number(f.stock), badge: f.badge || null, need: f.need || null, category_id: f.category_id, category: leaf.slug, subcategory: null };
+    const payload = { ...f, price: Number(f.price), old_price: f.old_price ? Number(f.old_price) : null, stock: Number(f.stock), badge: f.badge || null, need: f.need || null, category_id: f.category_id, category: leaf.slug, subcategory: null, complementary_ids: f.complementary_ids || [] };
     try {
       if (f.id) await api.put(`/products/${f.id}`, payload); else await api.post("/products", payload);
       toast.success("Produit enregistré"); onSaved();
@@ -122,6 +171,7 @@ function ProductForm({ product, brands, categories, onClose, onSaved }) {
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.is_featured} onChange={(e) => set("is_featured", e.target.checked)} className="accent-mint-600 w-4 h-4" /> Coup de cœur</label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.is_new} onChange={(e) => set("is_new", e.target.checked)} className="accent-mint-600 w-4 h-4" /> Nouveauté</label>
       </div>
+      <L label="Produits complémentaires recommandés"><ComplementarySelector value={f.complementary_ids} onChange={(v) => set("complementary_ids", v)} /></L>
       <button onClick={save} data-testid="pf-save" className="w-full py-3 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold">Enregistrer</button>
     </Modal>
   );
@@ -752,7 +802,9 @@ function SettingsPanel() {
           <L label="Email"><input value={f.email} onChange={(e) => set("email", e.target.value)} className={inp} /></L>
           <L label="Email expéditeur (Resend)"><input value={f.sender_email || ""} onChange={(e) => set("sender_email", e.target.value)} placeholder="commandes@votredomaine.com" data-testid="set-sender" className={inp} /></L>
           <L label="Horaires"><input value={f.horaires} onChange={(e) => set("horaires", e.target.value)} className={inp} /></L>
+          <L label="WhatsApp (BaridiMob)"><input value={f.whatsapp_number || ""} onChange={(e) => set("whatsapp_number", e.target.value)} placeholder="+213..." data-testid="set-whatsapp" className={inp} /></L>
           <div className="sm:col-span-2"><L label="Adresse"><input value={f.address} onChange={(e) => set("address", e.target.value)} data-testid="set-address" className={inp} /></L></div>
+          <div className="sm:col-span-2"><L label="Lien Google Maps (optionnel — sinon généré depuis l'adresse)"><input value={f.maps_link || ""} onChange={(e) => set("maps_link", e.target.value)} placeholder="https://maps.google.com/..." data-testid="set-maps" className={inp} /></L></div>
         </div>
       </div>
       <div>
@@ -775,7 +827,8 @@ function SettingsPanel() {
         </div>
         <div className="flex flex-wrap gap-5 mt-3">
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.pickup_enabled} onChange={(e) => set("pickup_enabled", e.target.checked)} className="accent-mint-600 w-4 h-4" /> Retrait pharmacie</label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.payment_cod_enabled} onChange={(e) => set("payment_cod_enabled", e.target.checked)} className="accent-mint-600 w-4 h-4" data-testid="set-cod" /> Paiement à la livraison</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.payment_cod_enabled} onChange={(e) => set("payment_cod_enabled", e.target.checked)} className="accent-mint-600 w-4 h-4" data-testid="set-cod" /> Espèces à la livraison</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.payment_baridimob_enabled} onChange={(e) => set("payment_baridimob_enabled", e.target.checked)} className="accent-mint-600 w-4 h-4" data-testid="set-baridimob" /> BaridiMob (WhatsApp)</label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.payment_card_enabled} onChange={(e) => set("payment_card_enabled", e.target.checked)} className="accent-mint-600 w-4 h-4" data-testid="set-card" /> Paiement carte (démo)</label>
         </div>
         <details className="mt-4">
@@ -789,6 +842,11 @@ function SettingsPanel() {
             ))}
           </div>
         </details>
+      </div>
+      <div>
+        <h3 className="font-display font-bold text-lg mb-3">Pages légales (footer)</h3>
+        <L label="Politique de confidentialité"><textarea rows={6} value={f.privacy_content || ""} onChange={(e) => set("privacy_content", e.target.value)} data-testid="set-privacy" className={inp} /></L>
+        <div className="mt-3"><L label="Conditions Générales de Vente (CGV)"><textarea rows={6} value={f.cgv_content || ""} onChange={(e) => set("cgv_content", e.target.value)} data-testid="set-cgv" className={inp} /></L></div>
       </div>
       <button onClick={save} disabled={busy} data-testid="settings-save" className="px-6 py-3 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold disabled:opacity-50">{busy ? "…" : "Enregistrer les paramètres"}</button>
     </div>

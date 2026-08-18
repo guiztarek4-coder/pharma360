@@ -3,6 +3,7 @@ import { MapPin, Phone, Mail, Clock, Send } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
 import { useSettings } from "@/context/SettingsContext";
+import { mapsHref } from "@/components/layout/Footer";
 
 export default function Contact() {
   const { settings } = useSettings();
@@ -29,15 +30,19 @@ export default function Contact() {
 
       <div className="grid lg:grid-cols-2 gap-8">
         <div className="space-y-4">
-          {[[MapPin, "Adresse", settings.address], [Phone, "Téléphone", settings.phone], [Mail, "Email", settings.email], [Clock, "Horaires", settings.horaires]].map(([Icon, t, v], i) => (
+          {[[MapPin, "Adresse", settings.address, true], [Phone, "Téléphone", settings.phone, false], [Mail, "Email", settings.email, false], [Clock, "Horaires", settings.horaires, false]].map(([Icon, t, v, isAddr], i) => (
             <div key={i} className="flex items-start gap-4 bg-white rounded-2xl border border-slate-200/80 p-5">
               <span className="w-11 h-11 rounded-xl bg-mint-50 grid place-items-center shrink-0"><Icon className="w-5 h-5 text-mint-600" /></span>
-              <div><div className="font-display font-bold text-sm">{t}</div><div className="text-slate-600 text-sm">{v}</div></div>
+              <div><div className="font-display font-bold text-sm">{t}</div>
+                {isAddr
+                  ? <a href={mapsHref(settings)} target="_blank" rel="noopener noreferrer" data-testid="contact-address-map" className="text-mint-700 hover:underline text-sm font-medium">{v} <span className="text-xs text-slate-400">(voir sur Google Maps)</span></a>
+                  : <div className="text-slate-600 text-sm">{v}</div>}
+              </div>
             </div>
           ))}
           <div className="rounded-2xl overflow-hidden border border-slate-200/80 h-64" data-testid="contact-map">
-            <iframe title="Pharma360 Alger" width="100%" height="100%" style={{ border: 0 }} loading="lazy"
-              src="https://www.openstreetmap.org/export/embed.html?bbox=3.0400%2C36.7600%2C3.0800%2C36.7850&layer=mapnik&marker=36.7725%2C3.0600" />
+            <iframe title="Localisation Pharma360" width="100%" height="100%" style={{ border: 0 }} loading="lazy"
+              src={`https://www.google.com/maps?q=${encodeURIComponent(settings.address || "Alger, Algérie")}&output=embed`} />
           </div>
         </div>
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Truck, CreditCard, ShoppingBag, Store, MapPin, Tag, Check } from "lucide-react";
+import { Truck, CreditCard, ShoppingBag, Store, MapPin, Tag, Check, MessageCircle, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
@@ -13,11 +13,13 @@ export default function Checkout() {
   const { user } = useAuth();
   const { settings } = useSettings();
   const navigate = useNavigate();
-  const [payment, setPayment] = useState(settings.payment_cod_enabled ? "cod" : "card");
+  const [payment, setPayment] = useState(settings.payment_cod_enabled ? "cod" : (settings.payment_baridimob_enabled ? "baridimob" : "card"));
   const [deliveryMethod, setDeliveryMethod] = useState("domicile");
   const [submitting, setSubmitting] = useState(false);
   const [promoInput, setPromoInput] = useState("");
   const [promo, setPromo] = useState(null);
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [notRobot, setNotRobot] = useState(false);
   const [form, setForm] = useState({
     full_name: user ? `${user.first_name} ${user.last_name}` : "",
     phone: user?.phone || "",
@@ -73,6 +75,8 @@ export default function Checkout() {
     e.preventDefault();
     if (!form.full_name || !form.phone) { toast.error("Nom et téléphone requis"); return; }
     if (deliveryMethod !== "pickup" && !form.street) { toast.error("Adresse de livraison requise"); return; }
+    if (!acceptTerms) { toast.error("Veuillez accepter la politique de confidentialité et les CGV"); return; }
+    if (!notRobot) { toast.error("Veuillez confirmer que vous n'êtes pas un robot"); return; }
     setSubmitting(true);
     try {
       const { data } = await api.post("/orders", {
@@ -83,6 +87,13 @@ export default function Checkout() {
         promo_code: promo ? promo.code : "",
       });
       clear();
+      if (payment === "baridimob") {
+        const num = (settings.whatsapp_number || "").replace(/[^0-9]/g, "");
+        const lines = items.map((i) => `• ${i.name} x${i.quantity} = ${formatDA(i.price * i.quantity)}`).join("\n");
+        const msg = `Bonjour, je souhaite payer ma commande *Pharma360* par BaridiMob.\n\n*Commande n°* ${data.id}\n*Client* : ${form.full_name}\n*Téléphone* : ${form.phone}\n\n${lines}\n\n*Total à payer* : ${formatDA(data.total)}\n*Livraison* : ${data.delivery_method}${form.street ? `\n*Adresse* : ${form.street}, ${form.commune}, ${form.wilaya}` : ""}`;
+        const wa = `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
+        window.open(wa, "_blank");
+      }
       navigate(`/commande/confirmee/${data.id}`, { state: { order: data } });
     } catch (err) {
       toast.error(formatApiError(err.response?.data?.detail));
@@ -153,7 +164,14 @@ export default function Checkout() {
               <label className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${payment === "cod" ? "border-mint-500 bg-mint-50" : "border-slate-200"}`} data-testid="checkout-payment-cod-radio">
                 <input type="radio" name="pay" checked={payment === "cod"} onChange={() => setPayment("cod")} className="accent-mint-600 w-4 h-4" />
                 <Truck className="w-5 h-5 text-mint-600" />
-                <div><div className="font-semibold text-sm">Paiement à la livraison</div><div className="text-xs text-slate-500">Payez en espèces à la réception</div></div>
+                <div><div className="font-semibold text-sm">Paiement en espèces à la livraison</div><div className="text-xs text-slate-500">Payez en espèces à la réception de votre commande</div></div>
+              </label>
+              )}
+              {settings.payment_baridimob_enabled && (
+              <label className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${payment === "baridimob" ? "border-mint-500 bg-mint-50" : "border-slate-200"}`} data-testid="checkout-payment-baridimob-radio">
+                <input type="radio" name="pay" checked={payment === "baridimob"} onChange={() => setPayment("baridimob")} className="accent-mint-600 w-4 h-4" />
+                <MessageCircle className="w-5 h-5 text-mint-600" />
+                <div><div className="font-semibold text-sm">BaridiMob</div><div className="text-xs text-slate-500">Vous serez redirigé vers WhatsApp pour finaliser le paiement</div></div>
               </label>
               )}
               {settings.payment_card_enabled && (
@@ -164,6 +182,25 @@ export default function Checkout() {
               </label>
               )}
             </div>
+          </div>
+
+          {/* Mandatory checkboxes */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 space-y-3">
+            <div data-testid="checkout-accept-terms">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input type="checkbox" checked={acceptTerms} onChange={(e) => setAcceptTerms(e.target.checked)} data-testid="checkout-accept-terms-input" className="accent-mint-600 w-4 h-4 mt-0.5" />
+                <span className="text-sm text-slate-600">J'ai lu et j'accepte la politique de confidentialité et les CGV.</span>
+              </label>
+              <div className="pl-7 mt-1 text-xs">
+                <a href="/confidentialite" target="_blank" rel="noreferrer" className="text-mint-700 underline">Lire la politique de confidentialité</a>
+                <span className="text-slate-300 mx-2">·</span>
+                <a href="/cgv" target="_blank" rel="noreferrer" className="text-mint-700 underline">Lire les CGV</a>
+              </div>
+            </div>
+            <label className="flex items-start gap-3 cursor-pointer" data-testid="checkout-not-robot">
+              <input type="checkbox" checked={notRobot} onChange={(e) => setNotRobot(e.target.checked)} className="accent-mint-600 w-4 h-4 mt-0.5" />
+              <span className="text-sm text-slate-600 flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-mint-600" /> Je ne suis pas un robot</span>
+            </label>
           </div>
         </div>
 
@@ -200,9 +237,9 @@ export default function Checkout() {
               {discount > 0 && <div className="flex justify-between text-mint-700"><span>Remise</span><span data-testid="summary-discount">- {formatDA(discount)}</span></div>}
               <div className="flex justify-between font-display font-extrabold text-lg pt-2"><span>Total</span><span className="text-mint-700" data-testid="checkout-total">{formatDA(grandTotal)}</span></div>
             </div>
-            <button type="submit" disabled={submitting} data-testid="checkout-submit"
+            <button type="submit" disabled={submitting || !acceptTerms || !notRobot} data-testid="checkout-submit"
               className="w-full mt-5 py-3.5 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold shadow-lg shadow-mint-600/30 transition-colors disabled:opacity-50">
-              {submitting ? "Traitement…" : payment === "card" ? "Payer maintenant" : "Confirmer la commande"}
+              {submitting ? "Traitement…" : payment === "card" ? "Payer maintenant" : payment === "baridimob" ? "Commander et payer via WhatsApp" : "Confirmer la commande"}
             </button>
           </div>
         </div>

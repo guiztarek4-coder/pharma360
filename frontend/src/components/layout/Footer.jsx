@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Leaf, ShieldCheck, PackageCheck, Headphones, Truck, Facebook, Instagram, MapPin, Phone, Mail, Clock } from "lucide-react";
-import { CATEGORIES } from "@/lib/site";
 import { useSettings } from "@/context/SettingsContext";
+import { useCategories } from "@/context/CategoriesContext";
 import { mediaUrl } from "@/lib/api";
 
 const trust = [
@@ -11,8 +11,12 @@ const trust = [
   { icon: Truck, title: "Livraison rapide", desc: "Alger · 24-48h" },
 ];
 
+export const mapsHref = (settings) =>
+  settings.maps_link || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(settings.address || "")}`;
+
 export default function Footer() {
   const { settings } = useSettings();
+  const { categories } = useCategories();
   return (
     <footer className="mt-16 bg-slate-dark text-slate-300" data-testid="site-footer">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -46,7 +50,7 @@ export default function Footer() {
           <div>
             <h4 className="font-display font-bold text-white mb-4 text-sm">Catégories</h4>
             <ul className="space-y-2 text-sm">
-              {CATEGORIES.slice(0, 6).map((c) => (
+              {categories.slice(0, 6).map((c) => (
                 <li key={c.id}><Link to={`/categorie/${c.id}`} className="text-slate-400 hover:text-mint-300 transition-colors">{c.label}</Link></li>
               ))}
             </ul>
@@ -66,7 +70,7 @@ export default function Footer() {
           <div>
             <h4 className="font-display font-bold text-white mb-4 text-sm">Contact</h4>
             <ul className="space-y-3 text-sm text-slate-400">
-              <li className="flex items-start gap-2"><MapPin className="w-4 h-4 text-mint-400 mt-0.5 shrink-0" />{settings.address}</li>
+              <li className="flex items-start gap-2"><MapPin className="w-4 h-4 text-mint-400 mt-0.5 shrink-0" /><a href={mapsHref(settings)} target="_blank" rel="noopener noreferrer" data-testid="footer-address-map" className="hover:text-mint-300 transition-colors">{settings.address}</a></li>
               <li className="flex items-center gap-2"><Phone className="w-4 h-4 text-mint-400" /><a href={`tel:${settings.phone_link}`}>{settings.phone}</a></li>
               <li className="flex items-center gap-2"><Mail className="w-4 h-4 text-mint-400" />{settings.email}</li>
               <li className="flex items-center gap-2"><Clock className="w-4 h-4 text-mint-400" />{settings.horaires}</li>
@@ -76,7 +80,7 @@ export default function Footer() {
 
         <div className="py-5 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
           <p>© {new Date().getFullYear()} {settings.brand_name}. Tous droits réservés.</p>
-          <p>Paiement à la livraison · Carte CIB / Edahabia</p>
+          <p>Paiement à la livraison · BaridiMob</p>
         </div>
       </div>
     </footer>

@@ -69,6 +69,16 @@ Site e-commerce de parapharmacie "Pharma360" basé en Algérie, inspiré de phar
 - **Suivi des stocks bas** : seuil global réglable dans Paramètres (`low_stock_threshold`, défaut 5) ; carte "Stock bas" sur le tableau de bord (rouge, cliquable) ; badge rouge sur l'onglet Produits ; filtre "Stock bas" ; lignes en rouge ; endpoints `GET /api/admin/stats` (low_stock) et `GET /api/admin/low-stock`.
 - Tests : backend 6/6 ; frontend vérifié (race condition corrigée, libellé "Produits similaires").
 
+## Implemented (2026-08-18 — iteration 9)
+- **Footer & pages légales éditables** : textes « Politique de confidentialité » et « CGV » modifiables dans l'admin (Paramètres) ; le footer utilise les vraies catégories.
+- **Adresse cliquable → Google Maps** : dans le footer et la page Contact (lien `maps_link` éditable, sinon généré depuis l'adresse) ; carte Google Maps intégrée sur Contact.
+- **Produits complémentaires** : sélection par produit dans l'admin (recherche + chips) ; affichés dans le panier (drawer) sous « Produits complémentaires recommandés » avec bouton Ajouter. Endpoint `GET /api/products/{id}/complementary`.
+- **Filtres pages catégories (feuilles)** : « En promo » + Marque.
+- **Menu « Marques »** dans la barre de navigation ; page marque avec filtres « En promo » + Catégorie/Sous-catégorie.
+- **Modes de paiement** : « Espèces à la livraison » + « BaridiMob » (carte masquée). BaridiMob crée la commande (statut « En attente de paiement BaridiMob ») puis ouvre WhatsApp (n° `whatsapp_number` éditable) avec un message pré-rempli.
+- **2 cases obligatoires au paiement** : acceptation confidentialité/CGV + « Je ne suis pas un robot » (case simple) ; bouton de validation désactivé tant que les deux ne sont pas cochées.
+- Tests : backend 5/5 ; frontend ~95% (le petit souci UX de la case CGV a été corrigé et re-vérifié).
+
 ## Known Limitations / MOCKED
 - Paiement en ligne par carte (CIB/Edahabia) = **SIMULÉ (démo)**. Stripe ne supporte pas l'Algérie (DZ), donc pas de passerelle réelle. La commande carte est marquée "payée" sans transaction réelle.
 - Email de notification de commande = **inactif tant que RESEND_API_KEY n'est pas configuré** (la notification in-app fonctionne).

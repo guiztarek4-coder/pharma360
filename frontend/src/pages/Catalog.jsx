@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useParams, Link } from "react-router-dom";
-import { SlidersHorizontal, X, ChevronRight, Home as HomeIcon } from "lucide-react";
+import { SlidersHorizontal, X, ChevronRight, Home as HomeIcon, Tag } from "lucide-react";
 import api, { mediaUrl } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
 import { useCategories } from "@/context/CategoriesContext";
@@ -91,6 +91,13 @@ export default function Catalog() {
 
   const Filters = () => (
     <div className="space-y-6">
+      <div>
+        <h4 className="font-display font-bold text-sm mb-3">Promotions</h4>
+        <button onClick={() => update("on_promo", onPromo ? "" : "1")} data-testid="filter-promo"
+          className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-semibold border transition-colors ${onPromo ? "bg-red-500 text-white border-red-500" : "bg-white border-mint-200 text-slate-700 hover:border-red-300"}`}>
+          <Tag className="w-3.5 h-3.5" /> En promo uniquement
+        </button>
+      </div>
       <div>
         <h4 className="font-display font-bold text-sm mb-3">Marques</h4>
         <div className="space-y-1.5 max-h-52 overflow-auto pr-1">

@@ -192,6 +192,7 @@ class ProductInput(BaseModel):
     is_featured: bool = False
     is_new: bool = False
     need: Optional[str] = None
+    complementary_ids: List[str] = []
 
 
 class BrandInput(BaseModel):
@@ -507,6 +508,22 @@ async def get_product(product_id: str):
     if not doc:
         raise HTTPException(status_code=404, detail="Produit introuvable")
     return clean(doc)
+
+
+@api.get("/products/{product_id}/complementary")
+async def product_complementary(product_id: str):
+    if not ObjectId.is_valid(product_id):
+        return []
+    p = await db.products.find_one({"_id": ObjectId(product_id)})
+    if not p:
+        return []
+    ids = [i for i in (p.get("complementary_ids") or []) if ObjectId.is_valid(i)]
+    if not ids:
+        return []
+    docs = await db.products.find({"_id": {"$in": [ObjectId(i) for i in ids]}}).to_list(20)
+    order = {i: k for k, i in enumerate(ids)}
+    docs.sort(key=lambda d: order.get(str(d["_id"]), 99))
+    return [clean(d) for d in docs]
 
 
 @api.get("/search/suggestions")
@@ -1090,7 +1107,7 @@ async def create_order(data: OrderInput, request: Request):
         "delivery_method": data.delivery_method,
         "payment_status": "paid" if data.payment_method == "card" else "pending",
         "notes": data.notes,
-        "status": "En attente",
+        "status": "En attente de paiement BaridiMob" if data.payment_method == "baridimob" else "En attente",
         "user_id": str(user["_id"]) if user else None,
         "created_at": now_utc().isoformat(),
     }
@@ -1355,6 +1372,11 @@ DEFAULT_SETTINGS = {
     "pickup_enabled": True,
     "payment_cod_enabled": True,
     "payment_card_enabled": True,
+    "payment_baridimob_enabled": True,
+    "whatsapp_number": "+213500000000",
+    "maps_link": "",
+    "privacy_content": "Chez Pharma360, la protection de vos données personnelles est une priorité. Cette politique explique comment nous collectons et utilisons vos informations.\n\nDonnées collectées\nNous collectons les informations que vous nous fournissez lors de la création de compte et de vos commandes : nom, prénom, email, téléphone et adresse de livraison.\n\nUtilisation\nVos données servent uniquement à traiter vos commandes, assurer la livraison et améliorer votre expérience. Elles ne sont jamais revendues à des tiers.\n\nVos droits\nVous pouvez à tout moment demander la modification ou la suppression de vos données en nous contactant.",
+    "cgv_content": "Les présentes Conditions Générales de Vente régissent les ventes réalisées sur Pharma360.\n\nProduits\nTous nos produits sont 100% originaux et proviennent de laboratoires certifiés. Les photos sont non contractuelles.\n\nPrix & Paiement\nLes prix sont affichés en Dinar Algérien (DA), toutes taxes comprises. Le paiement s'effectue à la livraison (espèces) ou via BaridiMob.\n\nLivraison\nLa livraison est assurée dans les 58 wilayas d'Algérie sous 24 à 48h. Des frais de livraison s'appliquent selon la wilaya.\n\nRetours\nLes produits peuvent être retournés sous 7 jours s'ils sont non ouverts et dans leur emballage d'origine.",
     "hero_image": None,
     "hero_title": "Prenez soin de votre peau & santé au meilleur prix",
     "hero_subtitle": "Cosmétiques et soins 100% originaux, livrés partout en Algérie. Payez à la livraison, en toute confiance.",
@@ -1520,6 +1542,11 @@ async def ensure_settings():
     else:
         merged = {k: existing.get(k, v) for k, v in DEFAULT_SETTINGS.items()}
         await db.settings.update_one({"_id": "site"}, {"$set": merged})
+    # one-time: enforce COD + BaridiMob as the two payment options
+    if not await db.meta.find_one({"_id": "payment_v2"}):
+        await db.settings.update_one({"_id": "site"},
+                                     {"$set": {"payment_card_enabled": False, "payment_baridimob_enabled": True}}, upsert=True)
+        await db.meta.insert_one({"_id": "payment_v2", "created_at": now_utc().isoformat()})
 
 
 @api.get("/settings")

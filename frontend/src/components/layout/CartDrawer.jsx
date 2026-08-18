@@ -1,10 +1,38 @@
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { X, Plus, Minus, Trash2, ShoppingBag } from "lucide-react";
+import { X, Plus, Minus, Trash2, ShoppingBag, Sparkles } from "lucide-react";
 import { useCart } from "@/context/CartContext";
-import { formatDA, mediaUrl } from "@/lib/api";
+import api, { formatDA, mediaUrl } from "@/lib/api";
+
+function Complementary({ productId, onAdd }) {
+  const [products, setProducts] = useState([]);
+  useEffect(() => {
+    if (!productId) { setProducts([]); return; }
+    api.get(`/products/${productId}/complementary`).then((r) => setProducts(r.data)).catch(() => setProducts([]));
+  }, [productId]);
+  if (products.length === 0) return null;
+  return (
+    <div className="p-4 border-t border-mint-100 bg-mint-50/40" data-testid="complementary-section">
+      <h4 className="font-display font-bold text-sm flex items-center gap-1.5 mb-3 text-slate-dark"><Sparkles className="w-4 h-4 text-mint-600" /> Produits complémentaires recommandés</h4>
+      <div className="flex gap-3 overflow-x-auto pb-1">
+        {products.map((p) => (
+          <div key={p.id} className="w-28 shrink-0 bg-white rounded-xl border border-mint-100 p-2" data-testid={`complementary-${p.id}`}>
+            <Link to={`/produit/${p.id}`}>
+              <img src={mediaUrl(p.images?.[0])} alt={p.name} className="w-full h-20 rounded-lg object-cover bg-mint-50" />
+              <div className="text-[11px] font-medium line-clamp-2 mt-1.5 leading-tight">{p.name}</div>
+            </Link>
+            <div className="text-mint-700 font-bold text-xs mt-1">{formatDA(p.price)}</div>
+            <button onClick={() => onAdd(p)} data-testid={`complementary-add-${p.id}`}
+              className="w-full mt-1.5 py-1 rounded-full bg-mint-600 hover:bg-mint-700 text-white text-[11px] font-semibold flex items-center justify-center gap-1"><Plus className="w-3 h-3" /> Ajouter</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function CartDrawer() {
-  const { items, open, setOpen, updateQty, removeItem, total, count } = useCart();
+  const { items, open, setOpen, updateQty, removeItem, total, count, addItem, lastAddedId } = useCart();
   const navigate = useNavigate();
   if (!open) return null;
 
@@ -29,24 +57,27 @@ export default function CartDrawer() {
           </div>
         ) : (
           <>
-            <div className="flex-1 overflow-auto p-4 space-y-3">
-              {items.map((it) => (
-                <div key={it.product_id} className="flex gap-3 p-3 rounded-2xl border border-mint-100 bg-mint-50/30" data-testid={`cart-line-${it.product_id}`}>
-                  <img src={mediaUrl(it.image)} alt="" className="w-16 h-16 rounded-xl object-cover bg-white shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold line-clamp-2">{it.name}</div>
-                    <div className="text-mint-700 font-bold text-sm mt-1">{formatDA(it.price)}</div>
-                    <div className="flex items-center justify-between mt-2">
-                      <div className="flex items-center gap-2 bg-white rounded-full border border-mint-200 px-1">
-                        <button onClick={() => updateQty(it.product_id, it.quantity - 1)} data-testid={`cart-dec-${it.product_id}`} className="w-6 h-6 grid place-items-center text-mint-700"><Minus className="w-3.5 h-3.5" /></button>
-                        <span className="text-sm font-semibold w-5 text-center">{it.quantity}</span>
-                        <button onClick={() => updateQty(it.product_id, it.quantity + 1)} data-testid={`cart-inc-${it.product_id}`} className="w-6 h-6 grid place-items-center text-mint-700"><Plus className="w-3.5 h-3.5" /></button>
+            <div className="flex-1 overflow-auto">
+              <div className="p-4 space-y-3">
+                {items.map((it) => (
+                  <div key={it.product_id} className="flex gap-3 p-3 rounded-2xl border border-mint-100 bg-mint-50/30" data-testid={`cart-line-${it.product_id}`}>
+                    <img src={mediaUrl(it.image)} alt="" className="w-16 h-16 rounded-xl object-cover bg-white shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold line-clamp-2">{it.name}</div>
+                      <div className="text-mint-700 font-bold text-sm mt-1">{formatDA(it.price)}</div>
+                      <div className="flex items-center justify-between mt-2">
+                        <div className="flex items-center gap-2 bg-white rounded-full border border-mint-200 px-1">
+                          <button onClick={() => updateQty(it.product_id, it.quantity - 1)} data-testid={`cart-dec-${it.product_id}`} className="w-6 h-6 grid place-items-center text-mint-700"><Minus className="w-3.5 h-3.5" /></button>
+                          <span className="text-sm font-semibold w-5 text-center">{it.quantity}</span>
+                          <button onClick={() => updateQty(it.product_id, it.quantity + 1)} data-testid={`cart-inc-${it.product_id}`} className="w-6 h-6 grid place-items-center text-mint-700"><Plus className="w-3.5 h-3.5" /></button>
+                        </div>
+                        <button onClick={() => removeItem(it.product_id)} data-testid={`cart-remove-${it.product_id}`} className="text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
                       </div>
-                      <button onClick={() => removeItem(it.product_id)} data-testid={`cart-remove-${it.product_id}`} className="text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+              <Complementary productId={lastAddedId} onAdd={(p) => addItem(p, 1)} />
             </div>
             <div className="p-5 border-t border-mint-100 space-y-3">
               <div className="flex items-center justify-between">

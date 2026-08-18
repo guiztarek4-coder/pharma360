@@ -183,6 +183,7 @@ export default function Header() {
             </div>
           ))}
           <span className="mx-2 w-px h-4 bg-mint-200 shrink-0" />
+          <Link to="/marques" data-testid="nav-marques" className="px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors whitespace-nowrap">Marques</Link>
           <Link to="/catalogue?is_new=1" data-testid="nav-nouveaux" className="px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors whitespace-nowrap">Nouveaux produits</Link>
           <Link to="/catalogue?on_promo=1" data-testid="nav-promo" className="px-2.5 py-1.5 text-sm font-semibold text-red-500 hover:text-red-600 transition-colors whitespace-nowrap">Promo</Link>
         </div>

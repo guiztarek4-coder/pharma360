@@ -18,6 +18,7 @@ const readCart = () => {
 export const CartProvider = ({ children }) => {
   const [items, setItems] = useState(readCart);
   const [open, setOpen] = useState(false);
+  const [lastAddedId, setLastAddedId] = useState(null);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
@@ -38,6 +39,7 @@ export const CartProvider = ({ children }) => {
         stock: product.stock,
       }];
     });
+    setLastAddedId(product.id);
     toast.success(`${product.name} ajouté au panier`);
     setOpen(true);
   };
@@ -57,7 +59,7 @@ export const CartProvider = ({ children }) => {
   const total = items.reduce((s, i) => s + i.price * i.quantity, 0);
 
   return (
-    <CartContext.Provider value={{ items, count, total, addItem, updateQty, removeItem, clear, open, setOpen }}>
+    <CartContext.Provider value={{ items, count, total, addItem, updateQty, removeItem, clear, open, setOpen, lastAddedId }}>
       {children}
     </CartContext.Provider>
   );
