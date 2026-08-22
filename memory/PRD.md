@@ -101,6 +101,16 @@ Site e-commerce de parapharmacie "Pharma360" basé en Algérie, inspiré de phar
 - **Parrainage fidélité** : chaque compte a un `referral_code` (`P360-XXXXXX`, généré à l'inscription, lazy pour anciens comptes). Champ « Code de parrainage » optionnel à l'inscription. Crédit **immédiat à l'inscription** du filleul : parrain +`referral_referrer_points` (200), filleul +`referral_referee_points` (100). Section « Parrainez vos amis » sur `/fidelite` (code + copier + nb filleuls). Config admin (onglet Fidélité : activer, points parrain/filleul). Code invalide → inscription OK sans crédit. Endpoint `loyalty_me` renvoie l'objet `referral`.
 - Tests : backend E2E (curl) 100%, frontend iteration 15 → 5/5 flux parrainage.
 
+## Implemented (2026-06-22 — iteration 16)
+- **Idées cadeaux (admin)** : page `/idees-cadeaux`. Settings `gift_intro` + `gift_featured_ids` (produits mis en avant). Collection `gift_packs` (coffrets : nom, description, image, produits inclus, prix unique, enabled) avec CRUD admin. Ajout d'un pack au panier = **1 seule ligne** au prix du pack (objet synthétique via addItem, id = ObjectId du pack). Endpoints `GET /api/gift-ideas`, `GET/POST/PUT/DELETE /api/admin/gift-packs`. Onglet admin **Cadeaux**.
+- **Carte cadeau physique** : page `/carte-cadeau`. Settings `giftcard_enabled`, `giftcard_amounts`, `giftcard_design` (image), `giftcard_terms`. Bouton « Commander » → ajoute la carte au panier (`giftcard-<montant>`, prix = montant) puis checkout normal (COD/BaridiMob). Config dans l'onglet admin **Cadeaux**.
+- Liens footer migrés : Idées cadeaux → `/idees-cadeaux`, Carte cadeau → `/carte-cadeau`.
+- Tests : backend 5/5, frontend iteration 16 → 100% des flux.
+
+## Resend — envoi d'emails vers n'importe quelle adresse (à faire par le client)
+- Limitation actuelle : `onboarding@resend.dev` n'envoie qu'à l'adresse propriétaire du compte Resend.
+- Solution : vérifier un domaine (ex. `pharma360benak.com`) dans Resend (Domains → Add Domain), ajouter les enregistrements DNS fournis (SPF `TXT`, DKIM `CNAME`/`TXT`, optionnel DMARC) chez le registrar, attendre la vérification, puis dans l'admin **Paramètres → Email expéditeur (Resend)** mettre `noreply@pharma360benak.com` (champ `sender_email`, utilisé par reset password, notif commande et notif chat).
+
 ## Known Limitations / MOCKED
 - Paiement en ligne par carte (CIB/Edahabia) = **SIMULÉ (démo)**. Stripe ne supporte pas l'Algérie (DZ), donc pas de passerelle réelle. La commande carte est marquée "payée" sans transaction réelle.
 - Email de notification de commande / reset password = **limité au tier gratuit Resend** (`onboarding@resend.dev` n'envoie qu'à l'adresse du propriétaire du compte). Le reset password propose le lien à l'écran en secours. Notification de nouveau message chat = in-app uniquement (pas d'email).

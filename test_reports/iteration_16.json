@@ -1,0 +1,25 @@
+{
+  "summary": "Tested Idées cadeaux (packs + featured) and Carte cadeau flows end-to-end. Backend: 5/5 pytest cases PASS (public GET /api/gift-ideas, admin auth guard, admin GET packs, full pack CRUD with public visibility check, and settings PUT /api/settings for gift_intro/giftcard_amounts/giftcard_terms with public reflect). Frontend: Admin /admin -> onglet Cadeaux -> gift-intro edit + featured products via ComplementarySelector saves with 'Enregistré' toast; pack-new modal creates a coffret (name, desc, product, price=4500) - appears in packs-list with pack-edit/pack-del; public /idees-cadeaux shows gift-intro, gift-packs and gift-featured; clicking gift-pack-add creates exactly ONE cart line at pack price (4 500 DA, cart_items=1 confirmed); admin giftcard config (amount edit, terms edit) persists and public /carte-cadeau shows updated amounts (giftcard-amount-1500) + terms; giftcard-order-btn adds 'Carte cadeau Pharma360' line and navigates to /commande; when giftcard_enabled=false, /carte-cadeau shows giftcard-disabled. Test data cleaned up (pack deleted, settings restored to defaults).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/panier (cart page)", "issues": ["Cart page body content appeared largely empty on screenshot even though cart-item-* rendered (cart_items=1) and header badge shows correct 4 500 DA. Possibly a lazy render or layout issue worth a visual check by main agent, but not blocking - price/quantity/testid all correct."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_gifts.py", "/app/test_reports/pytest/gifts.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GiftPackModal save button (pack-save) requires scroll_into_view to be reliably clickable in a 1080 viewport - modal content may extend beyond viewport when multiple products are chosen. Consider making the modal body scrollable while keeping the save button in a sticky footer inside the modal.",
+    "SettingsContext appears to cache values across SPA navigations. When updating giftcard fields the first time in a session, a soft-navigate to /carte-cadeau may show stale data unless a hard reload / refresh() is triggered. Verified refresh works after 'gifts-save' triggers refresh() internally, but timing between save and navigate should be increased or SettingsContext should re-fetch on route entry."
+  ],
+  "updated_files": ["/app/backend/tests/test_gifts.py"],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% (all specified flows)"},
+  "test_credentials": "Admin: pharmacie360benak@gmail.com / Aminetarek1992*",
+  "seed_data_creation": "Ephemeral: created TEST_Coffret E2E pack and temporarily changed gift_intro / giftcard_amounts[0]=1500 / giftcard_terms. All cleaned up at end of run - pack deleted, settings restored to production defaults, gift_featured_ids reset to [].",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login route is /compte (data-testid=login-identifier, login-password, auth-submit). Admin uses tab data-testid=admin-tab-gifts. ComplementarySelector search input is data-testid=pf-comp-search (present multiple times when a modal is open - use .last for modal, .first for the panel). Pack save button (pack-save) inside modal may be below the fold - use scroll_into_view_if_needed before click. Cleanup was done at end; no leftover test data in DB.",
+  "rca of the issue": "No blocking bugs. Minor code-review nits documented above."
+}

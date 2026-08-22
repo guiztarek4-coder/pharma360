@@ -27,6 +27,8 @@ import ResetPassword from "@/pages/ResetPassword";
 import VirtualTour from "@/pages/VirtualTour";
 import CmsPage from "@/pages/CmsPage";
 import Loyalty from "@/pages/Loyalty";
+import GiftIdeas from "@/pages/GiftIdeas";
+import GiftCard from "@/pages/GiftCard";
 import Admin from "@/pages/Admin";
 
 function Shell({ children }) {
@@ -74,6 +76,8 @@ function App() {
                 <Route path="/visite-360" element={<VirtualTour />} />
                 <Route path="/page/:slug" element={<CmsPage />} />
                 <Route path="/fidelite" element={<Loyalty />} />
+                <Route path="/idees-cadeaux" element={<GiftIdeas />} />
+                <Route path="/carte-cadeau" element={<GiftCard />} />
                 <Route path="/admin" element={<Admin />} />
               </Routes>
             </Shell>

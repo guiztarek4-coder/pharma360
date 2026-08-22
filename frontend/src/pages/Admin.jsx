@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { LayoutDashboard, Package, ShoppingBag, Tag, FileText, LogOut, Plus, Pencil, Trash2, X, Upload, TrendingUp, Users, Leaf, Settings, FolderTree, Ticket, Bell, Image as ImageIcon, UserCog, ChevronRight, GripVertical, Download, FileSpreadsheet, AlertCircle, AlertTriangle, Truck, MapPin, Compass, PanelBottom, ExternalLink, Gift, MessageCircle, Send } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Tag, FileText, LogOut, Plus, Pencil, Trash2, X, Upload, TrendingUp, Users, Leaf, Settings, FolderTree, Ticket, Bell, Image as ImageIcon, UserCog, ChevronRight, GripVertical, Download, FileSpreadsheet, AlertCircle, AlertTriangle, Truck, MapPin, Compass, PanelBottom, ExternalLink, Gift, MessageCircle, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -244,6 +244,7 @@ function Dashboard() {
     { id: "delivery", label: "Livraison", icon: Truck },
     { id: "promo", label: "Codes promo", icon: Ticket },
     { id: "loyalty", label: "Fidélité", icon: Gift },
+    { id: "gifts", label: "Cadeaux", icon: Sparkles },
     { id: "blog", label: "Blog", icon: FileText },
     { id: "banners", label: "Bannières", icon: ImageIcon },
     { id: "footer", label: "Footer & Pages", icon: PanelBottom },
@@ -372,6 +373,7 @@ function Dashboard() {
         {tab === "delivery" && <DeliveryPanel />}
         {tab === "promo" && <PromoPanel promos={promos} onChanged={loadAll} />}
         {tab === "loyalty" && <LoyaltyAdminPanel />}
+        {tab === "gifts" && <GiftAdminPanel />}
 
         {tab === "blog" && (
           <div>
@@ -984,6 +986,114 @@ function ChatAdminPanel() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function GiftPackModal({ pack, onClose, onSaved }) {
+  const [f, setF] = useState(pack || { name: "", description: "", image: null, product_ids: [], price: 0, enabled: true });
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (!f.name) { toast.error("Nom requis"); return; }
+    setBusy(true);
+    try {
+      const payload = { name: f.name, description: f.description || "", image: f.image || null, product_ids: f.product_ids || [], price: Number(f.price) || 0, enabled: f.enabled !== false };
+      if (f.id) await api.put(`/admin/gift-packs/${f.id}`, payload);
+      else await api.post("/admin/gift-packs", payload);
+      toast.success("Coffret enregistré"); onSaved();
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Modal title={f.id ? "Modifier le coffret" : "Nouveau coffret cadeau"} onClose={onClose}>
+      <L label="Nom du coffret"><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} className={inp} data-testid="pack-name" /></L>
+      <div className="mt-3"><L label="Description"><textarea rows={2} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} className={inp} data-testid="pack-desc" /></L></div>
+      <div className="mt-3"><L label="Image du coffret"><ImageUpload value={f.image} onChange={(url) => setF({ ...f, image: url })} /></L></div>
+      <div className="mt-3"><L label="Produits inclus"><ComplementarySelector value={f.product_ids} onChange={(ids) => setF({ ...f, product_ids: ids })} /></L></div>
+      <div className="mt-3"><L label="Prix du coffret (DA)"><input type="number" value={f.price} onChange={(e) => setF({ ...f, price: e.target.value })} className={inp} data-testid="pack-price" /></L></div>
+      <label className="flex items-center gap-2 text-sm mt-3"><input type="checkbox" checked={f.enabled !== false} onChange={(e) => setF({ ...f, enabled: e.target.checked })} className="accent-mint-600 w-4 h-4" /> Visible sur le site</label>
+      <button onClick={save} disabled={busy} data-testid="pack-save" className="w-full mt-4 py-3 rounded-full bg-mint-600 text-white font-semibold disabled:opacity-50">{busy ? "…" : "Enregistrer"}</button>
+    </Modal>
+  );
+}
+
+function GiftAdminPanel() {
+  const { refresh } = useSettings();
+  const [f, setF] = useState(null);
+  const [packs, setPacks] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const loadPacks = () => api.get("/admin/gift-packs").then((r) => setPacks(r.data)).catch(() => {});
+  useEffect(() => { api.get("/settings").then((r) => setF(r.data)); loadPacks(); }, []);
+  if (!f) return <p className="text-slate-400">Chargement…</p>;
+
+  const amounts = f.giftcard_amounts || [];
+  const setAmt = (i, v) => { const a = [...amounts]; a[i] = Number(v) || 0; setF({ ...f, giftcard_amounts: a }); };
+  const addAmt = () => setF({ ...f, giftcard_amounts: [...amounts, 1000] });
+  const delAmt = (i) => setF({ ...f, giftcard_amounts: amounts.filter((_, x) => x !== i) });
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.put("/settings", {
+        gift_intro: f.gift_intro, gift_featured_ids: f.gift_featured_ids || [],
+        giftcard_enabled: f.giftcard_enabled, giftcard_amounts: amounts.map(Number).filter((n) => n > 0),
+        giftcard_design: f.giftcard_design || null, giftcard_terms: f.giftcard_terms,
+      });
+      await refresh(); toast.success("Enregistré");
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    finally { setBusy(false); }
+  };
+  const delPack = async (id) => { if (!window.confirm("Supprimer ce coffret ?")) return; await api.delete(`/admin/gift-packs/${id}`); loadPacks(); };
+
+  return (
+    <div className="space-y-6" data-testid="admin-gifts-panel">
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-6 max-w-3xl space-y-5">
+        <div>
+          <h3 className="font-display font-bold text-lg mb-1">Idées cadeaux</h3>
+          <L label="Texte d'introduction"><textarea rows={2} value={f.gift_intro || ""} onChange={(e) => setF({ ...f, gift_intro: e.target.value })} className={inp} data-testid="gift-intro-input" /></L>
+          <div className="mt-3"><L label="Produits mis en avant"><ComplementarySelector value={f.gift_featured_ids} onChange={(ids) => setF({ ...f, gift_featured_ids: ids })} /></L></div>
+        </div>
+        <div className="border-t border-mint-100 pt-4">
+          <h3 className="font-display font-bold text-lg mb-1">Carte cadeau</h3>
+          <label className="flex items-center gap-2 text-sm mb-3"><input type="checkbox" checked={f.giftcard_enabled !== false} onChange={(e) => setF({ ...f, giftcard_enabled: e.target.checked })} className="accent-mint-600 w-4 h-4" data-testid="giftcard-enabled" /> Activer la carte cadeau</label>
+          <L label="Design de la carte (image)"><ImageUpload value={f.giftcard_design} onChange={(url) => setF({ ...f, giftcard_design: url })} /></L>
+          <div className="mt-3">
+            <div className="text-xs font-medium text-slate-500 mb-1">Montants disponibles (DA)</div>
+            <div className="flex flex-wrap gap-2">
+              {amounts.map((a, i) => (
+                <div key={i} className="flex items-center gap-1">
+                  <input type="number" value={a} onChange={(e) => setAmt(i, e.target.value)} className={`${inp} w-28`} data-testid={`giftcard-amount-${i}`} />
+                  <button onClick={() => delAmt(i)} className="text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              ))}
+              <button onClick={addAmt} className="flex items-center gap-1.5 text-mint-700 text-sm font-semibold px-2"><Plus className="w-4 h-4" /> Montant</button>
+            </div>
+          </div>
+          <div className="mt-3"><L label="Modalités / description"><textarea rows={3} value={f.giftcard_terms || ""} onChange={(e) => setF({ ...f, giftcard_terms: e.target.value })} className={inp} data-testid="giftcard-terms-input" /></L></div>
+        </div>
+        <button onClick={save} disabled={busy} data-testid="gifts-save" className="px-6 py-3 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold disabled:opacity-50">{busy ? "…" : "Enregistrer"}</button>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-6 max-w-3xl">
+        <div className="flex items-center justify-between mb-4">
+          <div><h3 className="font-display font-bold text-lg">Coffrets cadeaux (packs)</h3><p className="text-sm text-slate-500">Regroupez plusieurs produits en un coffret à prix unique.</p></div>
+          <button onClick={() => setEditing({})} data-testid="pack-new" className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-mint-600 text-white text-sm font-semibold"><Plus className="w-4 h-4" /> Nouveau coffret</button>
+        </div>
+        <div className="space-y-2" data-testid="packs-list">
+          {packs.map((p) => (
+            <div key={p.id} className="flex items-center gap-3 bg-mint-50/40 rounded-xl p-3" data-testid={`pack-row-${p.id}`}>
+              <div className="w-12 h-12 rounded-lg bg-white overflow-hidden shrink-0 grid place-items-center">{p.image ? <img src={mediaUrl(p.image)} alt="" className="w-full h-full object-cover" /> : <Gift className="w-5 h-5 text-mint-300" />}</div>
+              <div className="flex-1 min-w-0"><div className="font-semibold text-sm truncate">{p.name} {p.enabled === false && <span className="text-xs text-red-500 font-normal">(masqué)</span>}</div><div className="text-xs text-slate-400">{formatDA(p.price)} · {(p.product_ids || []).length} produits</div></div>
+              <button onClick={() => setEditing(p)} className="text-slate-400 hover:text-mint-600" data-testid={`pack-edit-${p.id}`}><Pencil className="w-4 h-4" /></button>
+              <button onClick={() => delPack(p.id)} className="text-slate-400 hover:text-red-500" data-testid={`pack-del-${p.id}`}><Trash2 className="w-4 h-4" /></button>
+            </div>
+          ))}
+          {packs.length === 0 && <p className="text-slate-400 text-sm">Aucun coffret.</p>}
+        </div>
+      </div>
+
+      {editing !== null && <GiftPackModal pack={editing.id ? editing : null} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); loadPacks(); }} />}
     </div>
   );
 }

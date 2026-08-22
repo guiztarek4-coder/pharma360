@@ -1489,6 +1489,72 @@ async def loyalty_redeem(payload: dict, user: dict = Depends(get_current_user)):
 
 
 # ----------------------------------------------------------------------------
+# Gift ideas & gift packs
+# ----------------------------------------------------------------------------
+class GiftPackInput(BaseModel):
+    name: str
+    description: str = ""
+    image: Optional[str] = None
+    product_ids: List[str] = []
+    price: float = 0
+    enabled: bool = True
+
+
+async def _resolve_products(ids):
+    oids = [ObjectId(i) for i in ids if ObjectId.is_valid(i)]
+    if not oids:
+        return []
+    docs = await db.products.find({"_id": {"$in": oids}}).to_list(200)
+    order = {i: k for k, i in enumerate(ids)}
+    docs.sort(key=lambda d: order.get(str(d["_id"]), 99))
+    return [clean(d) for d in docs]
+
+
+@api.get("/gift-ideas")
+async def gift_ideas():
+    s = await db.settings.find_one({"_id": "site"}) or {}
+    featured = await _resolve_products(s.get("gift_featured_ids", []))
+    packs = await db.gift_packs.find({"enabled": {"$ne": False}}).sort("created_at", -1).to_list(100)
+    out_packs = []
+    for p in packs:
+        p = clean(p)
+        p["products"] = await _resolve_products(p.get("product_ids", []))
+        out_packs.append(p)
+    return {"intro": s.get("gift_intro", ""), "featured": featured, "packs": out_packs}
+
+
+@api.get("/admin/gift-packs")
+async def admin_gift_packs(admin: dict = Depends(get_admin_user)):
+    packs = await db.gift_packs.find({}).sort("created_at", -1).to_list(200)
+    return [clean(p) for p in packs]
+
+
+@api.post("/admin/gift-packs")
+async def admin_create_pack(data: GiftPackInput, admin: dict = Depends(get_admin_user)):
+    doc = data.model_dump()
+    doc["created_at"] = now_utc().isoformat()
+    res = await db.gift_packs.insert_one(doc)
+    doc["_id"] = res.inserted_id
+    return clean(doc)
+
+
+@api.put("/admin/gift-packs/{pack_id}")
+async def admin_update_pack(pack_id: str, data: GiftPackInput, admin: dict = Depends(get_admin_user)):
+    if not ObjectId.is_valid(pack_id):
+        raise HTTPException(status_code=404, detail="Pack introuvable")
+    await db.gift_packs.update_one({"_id": ObjectId(pack_id)}, {"$set": data.model_dump()})
+    doc = await db.gift_packs.find_one({"_id": ObjectId(pack_id)})
+    return clean(doc)
+
+
+@api.delete("/admin/gift-packs/{pack_id}")
+async def admin_delete_pack(pack_id: str, admin: dict = Depends(get_admin_user)):
+    if ObjectId.is_valid(pack_id):
+        await db.gift_packs.delete_one({"_id": ObjectId(pack_id)})
+    return {"ok": True}
+
+
+# ----------------------------------------------------------------------------
 # Live chat (internal)
 # ----------------------------------------------------------------------------
 async def _get_optional_user(request: Request):
@@ -1828,8 +1894,8 @@ DEFAULT_SETTINGS = {
     "footer_about": "Pharma360 est votre parapharmacie en ligne de confiance en Algérie. Nous proposons des produits 100% originaux : soins, cosmétiques, compléments et bien-être, livrés partout en Algérie avec paiement à la livraison.",
     "whatsapp_url": "",
     "footer_news_links": [
-        {"id": "n1", "label": "Idées cadeaux", "target": "/page/idees-cadeaux", "enabled": True},
-        {"id": "n2", "label": "Carte cadeau", "target": "/page/carte-cadeau", "enabled": True},
+        {"id": "n1", "label": "Idées cadeaux", "target": "/idees-cadeaux", "enabled": True},
+        {"id": "n2", "label": "Carte cadeau", "target": "/carte-cadeau", "enabled": True},
         {"id": "n3", "label": "Soldes", "target": "/catalogue?on_promo=1", "enabled": True},
         {"id": "n4", "label": "Programme de fidélité", "target": "/fidelite", "enabled": True},
     ],
@@ -1860,6 +1926,12 @@ DEFAULT_SETTINGS = {
     "referral_enabled": True,
     "referral_referrer_points": 200,
     "referral_referee_points": 100,
+    "gift_intro": "Faites plaisir à vos proches avec notre sélection d'idées cadeaux et nos coffrets bien-être Pharma360.",
+    "gift_featured_ids": [],
+    "giftcard_enabled": True,
+    "giftcard_amounts": [1000, 2000, 3000, 5000],
+    "giftcard_design": None,
+    "giftcard_terms": "La carte cadeau physique Pharma360 est valable en ligne et en boutique. Choisissez un montant, commandez-la et faites plaisir à vos proches. Détails et modalités à préciser.",
     "top_bar_messages": [
         "Livraison rapide dans toutes les wilayas d'Algérie",
         "Produits 100% Originaux & Authentiques",
@@ -2058,6 +2130,17 @@ async def ensure_settings():
                 l["target"] = "/fidelite"
         await db.settings.update_one({"_id": "site"}, {"$set": {"footer_news_links": news}})
         await db.meta.insert_one({"_id": "loyalty_v1", "created_at": now_utc().isoformat()})
+    # one-time: point the gift footer links to their dedicated pages
+    if not await db.meta.find_one({"_id": "gifts_v1"}):
+        doc = await db.settings.find_one({"_id": "site"}) or {}
+        news = doc.get("footer_news_links") or []
+        for l in news:
+            if l.get("id") == "n1":
+                l["target"] = "/idees-cadeaux"
+            if l.get("id") == "n2":
+                l["target"] = "/carte-cadeau"
+        await db.settings.update_one({"_id": "site"}, {"$set": {"footer_news_links": news}})
+        await db.meta.insert_one({"_id": "gifts_v1", "created_at": now_utc().isoformat()})
 
 
 @api.get("/settings")
