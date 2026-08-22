@@ -162,6 +162,7 @@ class RegisterInput(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     password: str
+    referral_code: Optional[str] = None
 
 
 class LoginInput(BaseModel):
@@ -373,6 +374,16 @@ def send_customer_email(order: dict, sender: str = None):
 # ----------------------------------------------------------------------------
 # Auth routes
 # ----------------------------------------------------------------------------
+async def _gen_referral_code() -> str:
+    import string
+    alphabet = string.ascii_uppercase + string.digits
+    for _ in range(10):
+        code = "P360-" + "".join(secrets.choice(alphabet) for _ in range(6))
+        if not await db.users.find_one({"referral_code": code}):
+            return code
+    return "P360-" + secrets.token_hex(4).upper()
+
+
 @api.post("/auth/register")
 async def register(data: RegisterInput, response: Response):
     if not data.email and not data.phone:
@@ -383,12 +394,25 @@ async def register(data: RegisterInput, response: Response):
         raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
     if phone and await db.users.find_one({"phone": phone}):
         raise HTTPException(status_code=400, detail="Ce numéro est déjà utilisé")
+    # referral handling
+    s = await db.settings.find_one({"_id": "site"}) or {}
+    referrer = None
+    referee_bonus = 0
+    if data.referral_code and s.get("referral_enabled", True):
+        code = data.referral_code.strip().upper()
+        referrer = await db.users.find_one({"referral_code": code})
+        if referrer:
+            referee_bonus = int(s.get("referral_referee_points", 100))
     doc = {
         "first_name": data.first_name.strip(),
         "last_name": data.last_name.strip(),
         "password_hash": hash_password(data.password),
         "role": "customer",
         "addresses": [],
+        "loyalty_points": referee_bonus,
+        "loyalty_lifetime": referee_bonus,
+        "referral_code": await _gen_referral_code(),
+        "referred_by": str(referrer["_id"]) if referrer else None,
         "created_at": now_utc().isoformat(),
     }
     if email:
@@ -396,6 +420,16 @@ async def register(data: RegisterInput, response: Response):
     if phone:
         doc["phone"] = phone
     res = await db.users.insert_one(doc)
+    # credit the referrer
+    if referrer:
+        bonus = int(s.get("referral_referrer_points", 200))
+        await db.users.update_one({"_id": referrer["_id"]},
+                                  {"$inc": {"loyalty_points": bonus, "loyalty_lifetime": bonus}})
+        await db.notifications.insert_one({
+            "type": "referral",
+            "message": f"Parrainage : {doc['first_name']} s'est inscrit avec le code de {referrer.get('first_name','')} (+{bonus} pts)",
+            "read": False, "created_at": now_utc().isoformat(),
+        })
     token = create_access_token(str(res.inserted_id))
     set_auth_cookie(response, token)
     doc["_id"] = res.inserted_id
@@ -445,6 +479,27 @@ def send_reset_email(to: str, link: str, sender: str = None):
         resend.Emails.send({"from": sender, "to": [to], "subject": "Réinitialisation de votre mot de passe - Pharma360", "html": html})
     except Exception as e:
         logger.error("send_reset_email failed: %s", e)
+
+
+def send_chat_email(to: str, name: str, text: str, sender: str = None):
+    api_key = os.environ.get("RESEND_API_KEY")
+    if not api_key or not to:
+        logger.warning("Chat email skipped (no key or recipient)")
+        return
+    try:
+        import resend
+        resend.api_key = api_key
+        sender = sender or os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px;color:#0f172a">
+          <h2 style="color:#059669">Nouveau message sur le chat Pharma360</h2>
+          <p><b>{name}</b> vient de démarrer une discussion :</p>
+          <blockquote style="border-left:3px solid #059669;padding:8px 14px;color:#334155;background:#f0fdf4">{text}</blockquote>
+          <p style="font-size:13px;color:#64748b">Connectez-vous à votre espace admin (onglet « Chat ») pour répondre.</p>
+        </div>"""
+        resend.Emails.send({"from": sender, "to": [to], "subject": f"Nouveau message chat de {name} - Pharma360", "html": html})
+    except Exception as e:
+        logger.error("send_chat_email failed: %s", e)
 
 
 @api.post("/auth/forgot-password")
@@ -1382,6 +1437,12 @@ async def loyalty_me(user: dict = Depends(get_current_user)):
     lifetime = int(user.get("loyalty_lifetime", 0))
     points = int(user.get("loyalty_points", 0))
     current, nxt = _loyalty_tier(lifetime, tiers)
+    # ensure the user has a referral code (older accounts)
+    ref_code = user.get("referral_code")
+    if not ref_code:
+        ref_code = await _gen_referral_code()
+        await db.users.update_one({"_id": user["_id"]}, {"$set": {"referral_code": ref_code}})
+    referral_count = await db.users.count_documents({"referred_by": str(user["_id"])})
     # personal reward codes still active
     codes = await db.promo_codes.find({"source": "loyalty", "user_id": str(user["_id"])}).sort("created_at", -1).to_list(50)
     return {
@@ -1394,6 +1455,13 @@ async def loyalty_me(user: dict = Depends(get_current_user)):
         "tiers": tiers,
         "rewards": [r for r in s.get("loyalty_rewards", []) if r.get("enabled", True)],
         "my_codes": [clean(c) for c in codes],
+        "referral": {
+            "enabled": s.get("referral_enabled", True),
+            "code": ref_code,
+            "referrer_points": s.get("referral_referrer_points", 200),
+            "referee_points": s.get("referral_referee_points", 100),
+            "count": referral_count,
+        },
     }
 
 
@@ -1479,6 +1547,15 @@ async def chat_post_message(conv_id: str, payload: dict):
         "message": f"Nouveau message chat de {conv.get('name','Visiteur')}",
         "read": False, "created_at": now,
     })
+    # Email the admin ONLY on the first user message of the conversation
+    user_msg_count = await db.chat_messages.count_documents({"conversation_id": conv_id, "sender": "user"})
+    if user_msg_count == 1:
+        s = await db.settings.find_one({"_id": "site"}) or {}
+        sender = s.get("sender_email") or os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+        admin_user = await db.users.find_one({"role": "admin"})
+        admin_email = (admin_user or {}).get("email")
+        if admin_email:
+            asyncio.create_task(asyncio.to_thread(send_chat_email, admin_email, conv.get("name", "Visiteur"), text, sender))
     return {"ok": True}
 
 
@@ -1780,6 +1857,9 @@ DEFAULT_SETTINGS = {
     ],
     "theme_mode": "auto",
     "theme_manual": "spring",
+    "referral_enabled": True,
+    "referral_referrer_points": 200,
+    "referral_referee_points": 100,
     "top_bar_messages": [
         "Livraison rapide dans toutes les wilayas d'Algérie",
         "Produits 100% Originaux & Authentiques",

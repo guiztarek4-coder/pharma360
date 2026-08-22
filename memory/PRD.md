@@ -96,6 +96,11 @@ Site e-commerce de parapharmacie "Pharma360" basé en Algérie, inspiré de phar
 - **Chat client en direct (interne)** : widget flottant `ChatWidget` (bas-droite), démarrage conversation (nom/email ou auto si connecté), messages stockés (`chat_conversations` + `chat_messages`), polling 4s. Admin onglet **Chat** (liste conversations + réponse, badge non-lus). Notification in-app admin à chaque message client. Endpoints `/api/chat/start|{id}/messages|{id}/message` + `/api/admin/chat/*`.
 - Tests : iterations 11-14 → backend 100%, frontend 100% des flux.
 
+## Implemented (2026-06-22 — iteration 15)
+- **Email admin sur nouveau chat** : `send_chat_email` envoyé au **premier message** d'une conversation, vers l'email du compte admin (pharma360benak@gmail.com). Limité au tier gratuit Resend (owner uniquement).
+- **Parrainage fidélité** : chaque compte a un `referral_code` (`P360-XXXXXX`, généré à l'inscription, lazy pour anciens comptes). Champ « Code de parrainage » optionnel à l'inscription. Crédit **immédiat à l'inscription** du filleul : parrain +`referral_referrer_points` (200), filleul +`referral_referee_points` (100). Section « Parrainez vos amis » sur `/fidelite` (code + copier + nb filleuls). Config admin (onglet Fidélité : activer, points parrain/filleul). Code invalide → inscription OK sans crédit. Endpoint `loyalty_me` renvoie l'objet `referral`.
+- Tests : backend E2E (curl) 100%, frontend iteration 15 → 5/5 flux parrainage.
+
 ## Known Limitations / MOCKED
 - Paiement en ligne par carte (CIB/Edahabia) = **SIMULÉ (démo)**. Stripe ne supporte pas l'Algérie (DZ), donc pas de passerelle réelle. La commande carte est marquée "payée" sans transaction réelle.
 - Email de notification de commande / reset password = **limité au tier gratuit Resend** (`onboarding@resend.dev` n'envoie qu'à l'adresse du propriétaire du compte). Le reset password propose le lien à l'écran en secours. Notification de nouveau message chat = in-app uniquement (pas d'email).

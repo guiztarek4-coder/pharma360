@@ -158,6 +158,25 @@ export function LoyaltyContent() {
           <p className="text-xs text-slate-400 mt-2">Saisissez ce code lors du paiement pour bénéficier de votre réduction.</p>
         </div>
       )}
+      {/* Referral */}
+      {user && data.referral && data.referral.enabled && (
+        <div className="rounded-3xl border border-mint-200 bg-mint-50/50 p-6 sm:p-8" data-testid="loyalty-referral">
+          <div className="flex items-start gap-3 mb-4">
+            <span className="w-11 h-11 rounded-full bg-mint-600 grid place-items-center shrink-0"><Sparkles className="w-5 h-5 text-white" /></span>
+            <div>
+              <h3 className="font-display font-bold text-lg">Parrainez vos amis</h3>
+              <p className="text-sm text-slate-600">Partagez votre code : votre filleul reçoit <b>{data.referral.referee_points} points</b> de bienvenue et vous gagnez <b>{data.referral.referrer_points} points</b> dès son inscription.</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex-1 min-w-[180px] px-4 py-3 rounded-xl bg-white border border-mint-200 font-mono font-bold text-mint-700 text-center tracking-wider" data-testid="referral-code">{data.referral.code}</div>
+            <button onClick={() => copy(data.referral.code)} data-testid="referral-copy" className="flex items-center gap-1.5 px-5 py-3 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold text-sm">
+              {copied === data.referral.code ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />} Copier mon code
+            </button>
+          </div>
+          {data.referral.count > 0 && <p className="text-sm text-mint-700 mt-3 font-semibold" data-testid="referral-count">{data.referral.count} filleul{data.referral.count > 1 ? "s" : ""} parrainé{data.referral.count > 1 ? "s" : ""}</p>}
+        </div>
+      )}
     </div>
   );
 }

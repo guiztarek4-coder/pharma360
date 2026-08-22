@@ -1011,6 +1011,9 @@ function LoyaltyAdminPanel() {
         loyalty_enabled: f.loyalty_enabled, loyalty_points_per_100da: Number(f.loyalty_points_per_100da) || 1,
         loyalty_tiers: tiers.map((t) => ({ name: t.name, min: Number(t.min) || 0 })),
         loyalty_rewards: rewards.map((r) => ({ ...r, points: Number(r.points) || 0, value: Number(r.value) || 0 })),
+        referral_enabled: f.referral_enabled,
+        referral_referrer_points: Number(f.referral_referrer_points) || 0,
+        referral_referee_points: Number(f.referral_referee_points) || 0,
       });
       await refresh(); toast.success("Programme de fidélité enregistré");
     } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
@@ -1026,6 +1029,17 @@ function LoyaltyAdminPanel() {
       <L label="Points gagnés par tranche de 100 DA">
         <input type="number" min="0" value={f.loyalty_points_per_100da ?? 1} onChange={(e) => setF({ ...f, loyalty_points_per_100da: e.target.value })} className={inp} data-testid="loyalty-rate" />
       </L>
+
+      <div className="border-t border-mint-100 pt-4">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="font-semibold text-sm">Parrainage</h4>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.referral_enabled !== false} onChange={(e) => setF({ ...f, referral_enabled: e.target.checked })} className="accent-mint-600 w-4 h-4" data-testid="referral-enabled" /> Activé</label>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <L label="Points offerts au parrain"><input type="number" min="0" value={f.referral_referrer_points ?? 200} onChange={(e) => setF({ ...f, referral_referrer_points: e.target.value })} className={inp} data-testid="referral-referrer-points" /></L>
+          <L label="Points de bienvenue au filleul"><input type="number" min="0" value={f.referral_referee_points ?? 100} onChange={(e) => setF({ ...f, referral_referee_points: e.target.value })} className={inp} data-testid="referral-referee-points" /></L>
+        </div>
+      </div>
 
       <div>
         <h4 className="font-semibold text-sm mb-2">Statuts (paliers)</h4>

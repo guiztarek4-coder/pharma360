@@ -16,7 +16,7 @@ function AuthForm() {
   const [mode, setMode] = useState("login");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
-  const [f, setF] = useState({ first_name: "", last_name: "", identifier: "", email: "", phone: "", password: "" });
+  const [f, setF] = useState({ first_name: "", last_name: "", identifier: "", email: "", phone: "", password: "", referral_code: "" });
   const [resetLink, setResetLink] = useState("");
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
@@ -36,7 +36,7 @@ function AuthForm() {
           toast.success(data.message || "Aucun compte trouvé pour cet email.");
         }
       } else {
-        await register({ first_name: f.first_name, last_name: f.last_name, email: f.email || null, phone: f.phone || null, password: f.password });
+        await register({ first_name: f.first_name, last_name: f.last_name, email: f.email || null, phone: f.phone || null, password: f.password, referral_code: f.referral_code || null });
         toast.success("Compte créé avec succès");
       }
     } catch (e) {
@@ -67,6 +67,7 @@ function AuthForm() {
               <Input label="Email (optionnel)" type="email" value={f.email} onChange={set("email")} testid="reg-email" />
               <Input label="Téléphone (optionnel)" value={f.phone} onChange={set("phone")} testid="reg-phone" placeholder="05XX XX XX XX" />
               <Input label="Mot de passe" type="password" value={f.password} onChange={set("password")} required testid="reg-password" />
+              <Input label="Code de parrainage (optionnel)" value={f.referral_code} onChange={set("referral_code")} testid="reg-referral" placeholder="P360-XXXXXX" />
               <p className="text-xs text-slate-400">Renseignez au moins un email ou un numéro de téléphone.</p>
             </>
           ) : mode === "forgot" ? (
