@@ -1,18 +1,23 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Package, MapPin, LogOut, Plus, Trash2 } from "lucide-react";
+import { User, Package, MapPin, LogOut, Plus, Trash2, Heart, Gift } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatDA, formatApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { WILAYAS } from "@/lib/site";
 import StatusTracker from "@/components/StatusTracker";
+import ProductCard from "@/components/ProductCard";
+import { useFavorites } from "@/context/FavoritesContext";
+import { LoyaltyContent } from "@/pages/Loyalty";
 
 function AuthForm() {
   const { login, register } = useAuth();
+  const navigate = useNavigate();
   const [mode, setMode] = useState("login");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const [f, setF] = useState({ first_name: "", last_name: "", identifier: "", email: "", phone: "", password: "" });
+  const [resetLink, setResetLink] = useState("");
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
   const submit = async (e) => {
@@ -24,8 +29,12 @@ function AuthForm() {
         toast.success("Connexion réussie");
       } else if (mode === "forgot") {
         const { data } = await api.post("/auth/forgot-password", { email: f.email });
-        toast.success(data.message || "Email envoyé si le compte existe.");
-        setMode("login");
+        if (data.reset_link) {
+          setResetLink(data.reset_link);
+          toast.success("Lien de réinitialisation prêt");
+        } else {
+          toast.success(data.message || "Aucun compte trouvé pour cet email.");
+        }
       } else {
         await register({ first_name: f.first_name, last_name: f.last_name, email: f.email || null, phone: f.phone || null, password: f.password });
         toast.success("Compte créé avec succès");
@@ -62,8 +71,18 @@ function AuthForm() {
             </>
           ) : mode === "forgot" ? (
             <>
-              <p className="text-sm text-slate-500">Saisissez votre email : vous recevrez un lien pour créer un nouveau mot de passe.</p>
+              <p className="text-sm text-slate-500">Saisissez votre email : vous obtiendrez un lien pour créer un nouveau mot de passe.</p>
               <Input label="Email" type="email" value={f.email} onChange={set("email")} required testid="forgot-email" />
+              {resetLink && (
+                <div className="p-4 rounded-xl bg-mint-50 border border-mint-200 space-y-3" data-testid="reset-link-box">
+                  <p className="text-sm text-slate-600">Votre lien est prêt. Cliquez pour définir un nouveau mot de passe :</p>
+                  <button type="button" onClick={() => navigate(resetLink.replace(/^https?:\/\/[^/]+/, ""))}
+                    data-testid="reset-link-btn"
+                    className="w-full py-2.5 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold text-sm">
+                    Créer un nouveau mot de passe
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -94,9 +113,11 @@ function Input({ label, testid, ...props }) {
 
 function Dashboard() {
   const { user, logout } = useAuth();
+  const { ids: favIds } = useFavorites();
   const [tab, setTab] = useState("orders");
   const [orders, setOrders] = useState([]);
   const [addresses, setAddresses] = useState([]);
+  const [favorites, setFavorites] = useState([]);
   const [showAddr, setShowAddr] = useState(false);
   const [addr, setAddr] = useState({ label: "Domicile", full_name: "", phone: "", wilaya: "Alger", commune: "", street: "" });
 
@@ -104,6 +125,10 @@ function Dashboard() {
     api.get("/orders/mine").then((r) => setOrders(r.data)).catch(() => {});
     api.get("/account/addresses").then((r) => setAddresses(r.data)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    api.get("/favorites").then((r) => setFavorites(r.data)).catch(() => {});
+  }, [favIds]);
 
   const saveAddr = async () => {
     if (!addr.full_name || !addr.phone || !addr.street) { toast.error("Champs requis manquants"); return; }
@@ -130,6 +155,8 @@ function Dashboard() {
       <div className="flex gap-2 mb-6">
         <button onClick={() => setTab("orders")} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${tab === "orders" ? "bg-mint-600 text-white" : "bg-white border border-mint-200"}`} data-testid="tab-orders"><Package className="w-4 h-4" /> Mes commandes</button>
         <button onClick={() => setTab("addresses")} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${tab === "addresses" ? "bg-mint-600 text-white" : "bg-white border border-mint-200"}`} data-testid="tab-addresses"><MapPin className="w-4 h-4" /> Mes adresses</button>
+        <button onClick={() => setTab("favorites")} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${tab === "favorites" ? "bg-mint-600 text-white" : "bg-white border border-mint-200"}`} data-testid="tab-favorites"><Heart className="w-4 h-4" /> Mes favoris</button>
+        <button onClick={() => setTab("loyalty")} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${tab === "loyalty" ? "bg-mint-600 text-white" : "bg-white border border-mint-200"}`} data-testid="tab-loyalty"><Gift className="w-4 h-4" /> Fidélité</button>
       </div>
 
       {tab === "orders" && (
@@ -185,6 +212,20 @@ function Dashboard() {
           )}
         </div>
       )}
+
+      {tab === "favorites" && (
+        <div data-testid="favorites-panel">
+          {favorites.length === 0 ? (
+            <p className="text-slate-400 text-center py-12">Vous n'avez pas encore de favoris. Cliquez sur le cœur d'un produit pour l'ajouter.</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {favorites.map((p) => <ProductCard key={p.id} product={p} />)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "loyalty" && <div data-testid="loyalty-panel"><LoyaltyContent /></div>}
     </div>
   );
 }

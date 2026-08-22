@@ -1,0 +1,46 @@
+{
+  "summary": "Tested forgot-password flow (both on /compte and /commande) + favorites feature. Backend endpoints all pass (5/5). Frontend: /compte forgot flow works (reset-link-box, navigation to /reset-password, unknown email hidden). Favorites work end-to-end for logged-in customers (add, toast, red heart, panel display, remove, product page fav-btn). Non-connected user gets 'Connectez-vous' toast. CHECKOUT forgot-password is BROKEN due to nested <form> elements in Checkout.jsx — inner submit button submits the outer checkout form instead of doForgot handler, so the checkout-reset-link-box never appears.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Checkout.jsx",
+        "issue": "Nested <form> tags: <form onSubmit={submit}> (line 167) wraps <form onSubmit={doForgot}> (line 177) and <form onSubmit={doQuickLogin}> (line 193). HTML disallows nested forms; browser strips inner form tags, so 'checkout-forgot-submit' and 'checkout-login-submit' buttons submit the OUTER checkout form. Result: URL changes /commande -> /commande? (native GET submit), doForgot never runs, checkout-reset-link-box never appears. Same defect will affect checkout quick-login submit. React logs hydration errors 'form cannot be a descendant of form'.",
+        "selector": "[data-testid='checkout-forgot-submit'] / [data-testid='checkout-login-submit']",
+        "priority": "HIGH"
+      },
+      {
+        "component": "Account.jsx (Dashboard favorites tab)",
+        "issue": "Local `favorites` state is fetched only once in useEffect on mount. Removing a favorite via heart button updates FavoritesContext.ids but NOT the Dashboard's favorites array, so the removed product remains visible until user navigates away and back. Re-clicking tab-favorites does not re-fetch (tab already active).",
+        "selector": "[data-testid='favorites-panel']",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_favorites_and_forgot.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "FIX Checkout.jsx nested forms: replace the inner <form>...</form> around doForgot and doQuickLogin with <div>...</div> and change the inner submit buttons to type='button' with onClick={doForgot}/{doQuickLogin}. Or move the whole login/forgot widget OUT of the main <form>.",
+    "Refresh favorites panel after removal: in FavoritesContext, expose a way for Dashboard to re-fetch, OR derive favorites from context.ids + a products lookup, OR call api.get('/favorites') again when ids change."
+  ],
+  "critical_code_review_comments": [
+    "server.py is >1500 lines — should be split into routers (auth, products, orders, admin, favorites, etc.).",
+    "set_auth_cookie uses secure=True & samesite='none' which is required for cross-site cookie in preview; OK.",
+    "Favorites endpoints correctly gated with get_current_user; input validation of product_id via ObjectId.is_valid — OK.",
+    "forgot-password intentionally returns reset_link inline (fallback for Resend free-tier). Acceptable but note it leaks the link over HTTPS response — mitigated because it only returns when email exists, and token is single-use with 1h expiry."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_favorites_and_forgot.py"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "80% (4/5 flows)"},
+  "test_credentials": "Admin: pharmacie360benak@gmail.com / Aminetarek1992*. Also registered a test customer (testfav_<ts>@test.com / password123) to test /compte favorites tab because admin gets redirected to /admin.",
+  "seed_data_creation": "Registered 1 test customer for favorites panel testing.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend forgot-password + favorites CRUD confirmed working. /compte forgot flow and favorites (add/remove/product-page) verified via Playwright. Only failure: nested-form HTML bug in Checkout.jsx blocking the checkout forgot-password widget and probably the checkout quick-login submit too. After main agent fixes it, re-run just TEST 5 and also validate checkout-login-submit actually logs in without submitting the outer order form.",
+  "rca of the issue": "Checkout.jsx renders <form onSubmit={submit}> as the outer order form. Inside it, at lines 177 and 193, two additional <form> elements are declared for the login/forgot quick-widgets. HTML5 spec forbids nested forms; browsers silently drop the inner form tags during parsing. Therefore any <button type='submit'> inside those pseudo-forms fires the outer form's onSubmit (or the browser's default GET submit) instead of doForgot/doQuickLogin. Observed: clicking checkout-forgot-submit navigates from /commande to /commande? (default GET) and no state update occurs. Mitigation: convert inner forms to divs and change submit buttons to type='button' invoking the handler on click; or portal the login/forgot widget outside the outer form."
+}

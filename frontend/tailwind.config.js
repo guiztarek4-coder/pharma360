@@ -31,9 +31,9 @@ module.exports = {
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
         mint: {
-          50: '#ECFDF5', 100: '#D1FAE5', 200: '#A7F3D0', 300: '#6EE7B7',
-          400: '#34D399', 500: '#10B981', 600: '#059669', 700: '#047857',
-          800: '#065F46', 900: '#064E3B',
+          50: 'var(--mint-50)', 100: 'var(--mint-100)', 200: 'var(--mint-200)', 300: 'var(--mint-300)',
+          400: 'var(--mint-400)', 500: 'var(--mint-500)', 600: 'var(--mint-600)', 700: 'var(--mint-700)',
+          800: 'var(--mint-800)', 900: 'var(--mint-900)',
         },
         slate: {
           dark: '#0F172A',

@@ -1,10 +1,13 @@
 import { Link } from "react-router-dom";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, Heart } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { useFavorites } from "@/context/FavoritesContext";
 import { formatDA, mediaUrl } from "@/lib/api";
 
 export default function ProductCard({ product }) {
   const { addItem } = useCart();
+  const { isFavorite, toggleFavorite } = useFavorites();
+  const fav = isFavorite(product.id);
   const promo = product.old_price && product.old_price > product.price;
   const discount = promo ? Math.round((1 - product.price / product.old_price) * 100) : 0;
   const badge = product.badge || (product.is_new ? "NOUVEAU" : null);
@@ -21,6 +24,13 @@ export default function ProductCard({ product }) {
         </div>
         {product.stock <= 0 && <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full bg-slate-700 text-white text-[10px] font-semibold">Rupture</span>}
       </Link>
+      <button
+        onClick={(e) => { e.preventDefault(); toggleFavorite(product); }}
+        data-testid={`product-card-fav-${product.id}`}
+        aria-label="Ajouter aux favoris"
+        className={`absolute top-2.5 right-2.5 z-10 w-9 h-9 rounded-full grid place-items-center shadow-md transition-all active:scale-90 ${fav ? "bg-red-500 text-white" : "bg-white/90 text-slate-500 hover:text-red-500"} ${product.stock <= 0 ? "top-11" : ""}`}>
+        <Heart className="w-4.5 h-4.5" fill={fav ? "currentColor" : "none"} />
+      </button>
       <div className="p-3 sm:p-4 flex flex-col flex-1">
         {product.brand && <div className="text-[11px] font-mono-label text-mint-600 mb-1">{product.brand}</div>}
         <Link to={`/produit/${product.id}`} className="text-sm font-semibold text-slate-dark line-clamp-2 leading-snug hover:text-mint-700 transition-colors min-h-[2.5rem]">{product.name}</Link>

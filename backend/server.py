@@ -463,8 +463,13 @@ async def forgot_password(data: ForgotPasswordInput, request: Request):
         s = await db.settings.find_one({"_id": "site"}) or {}
         sender = s.get("sender_email") or os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
         send_reset_email(email, link, sender)
+        # Fallback: return the link directly so the client can reset immediately
+        # (Resend free tier ne peut envoyer qu'à l'adresse vérifiée du compte).
+        return {"ok": True, "found": True, "reset_link": link,
+                "message": "Cliquez sur le bouton ci-dessous pour créer un nouveau mot de passe."}
     # Never reveal whether the email exists
-    return {"ok": True, "message": "Si un compte existe pour cet email, un lien de réinitialisation a été envoyé."}
+    return {"ok": True, "found": False, "reset_link": None,
+            "message": "Si un compte existe pour cet email, un lien de réinitialisation a été envoyé."}
 
 
 @api.post("/auth/reset-password")
@@ -507,6 +512,36 @@ async def delete_address(addr_id: str, user: dict = Depends(get_current_user)):
     addresses = [a for a in user.get("addresses", []) if a.get("id") != addr_id]
     await db.users.update_one({"_id": user["_id"]}, {"$set": {"addresses": addresses}})
     return addresses
+
+
+# ----------------------------------------------------------------------------
+# Favorites routes
+# ----------------------------------------------------------------------------
+@api.get("/favorites")
+async def get_favorites(user: dict = Depends(get_current_user)):
+    ids = [i for i in (user.get("favorites") or []) if ObjectId.is_valid(i)]
+    if not ids:
+        return []
+    docs = await db.products.find({"_id": {"$in": [ObjectId(i) for i in ids]}}).to_list(200)
+    order = {i: k for k, i in enumerate(ids)}
+    docs.sort(key=lambda d: order.get(str(d["_id"]), 99))
+    return [clean(d) for d in docs]
+
+
+@api.post("/favorites/{product_id}")
+async def add_favorite(product_id: str, user: dict = Depends(get_current_user)):
+    if not ObjectId.is_valid(product_id):
+        raise HTTPException(status_code=404, detail="Produit introuvable")
+    await db.users.update_one({"_id": user["_id"]}, {"$addToSet": {"favorites": product_id}})
+    u = await db.users.find_one({"_id": user["_id"]})
+    return {"favorites": u.get("favorites", [])}
+
+
+@api.delete("/favorites/{product_id}")
+async def remove_favorite(product_id: str, user: dict = Depends(get_current_user)):
+    await db.users.update_one({"_id": user["_id"]}, {"$pull": {"favorites": product_id}})
+    u = await db.users.find_one({"_id": user["_id"]})
+    return {"favorites": u.get("favorites", [])}
 
 
 # ----------------------------------------------------------------------------
@@ -1258,6 +1293,11 @@ async def create_order(data: OrderInput, request: Request):
     }
     res = await db.orders.insert_one(order)
     order["_id"] = res.inserted_id
+    # single-use promo (loyalty reward): deactivate after use
+    if data.promo_code:
+        await db.promo_codes.update_one(
+            {"code": data.promo_code.strip().upper(), "single_use": True},
+            {"$set": {"active": False}})
     for item in data.items:
         if ObjectId.is_valid(item.product_id):
             await db.products.update_one({"_id": ObjectId(item.product_id)},
@@ -1293,9 +1333,191 @@ async def all_orders(admin: dict = Depends(get_admin_user)):
 @api.put("/orders/{order_id}/status")
 async def update_order_status(order_id: str, payload: dict, admin: dict = Depends(get_admin_user)):
     status = payload.get("status", "En attente")
+    order = await db.orders.find_one({"_id": ObjectId(order_id)})
     await db.orders.update_one({"_id": ObjectId(order_id)}, {"$set": {"status": status}})
+    # Loyalty: credit points once the order is delivered
+    if order and status == "Livrée" and not order.get("loyalty_credited") and order.get("user_id"):
+        s = await db.settings.find_one({"_id": "site"}) or {}
+        if s.get("loyalty_enabled", True):
+            rate = s.get("loyalty_points_per_100da", 1)
+            pts = int(order.get("subtotal", 0) // 100) * rate
+            if pts > 0 and ObjectId.is_valid(order["user_id"]):
+                await db.users.update_one({"_id": ObjectId(order["user_id"])},
+                                          {"$inc": {"loyalty_points": pts, "loyalty_lifetime": pts}})
+            await db.orders.update_one({"_id": ObjectId(order_id)},
+                                       {"$set": {"loyalty_credited": True, "loyalty_points_earned": pts}})
     doc = await db.orders.find_one({"_id": ObjectId(order_id)})
     return clean(doc)
+
+
+# ----------------------------------------------------------------------------
+# Loyalty program
+# ----------------------------------------------------------------------------
+def _loyalty_tier(lifetime: int, tiers: list):
+    tiers = sorted(tiers or [], key=lambda t: t.get("min", 0))
+    current = tiers[0] if tiers else {"name": "Bronze", "min": 0}
+    nxt = None
+    for i, t in enumerate(tiers):
+        if lifetime >= t.get("min", 0):
+            current = t
+            nxt = tiers[i + 1] if i + 1 < len(tiers) else None
+    return current, nxt
+
+
+@api.get("/loyalty/config")
+async def loyalty_config():
+    s = await db.settings.find_one({"_id": "site"}) or {}
+    return {
+        "enabled": s.get("loyalty_enabled", True),
+        "points_per_100da": s.get("loyalty_points_per_100da", 1),
+        "tiers": s.get("loyalty_tiers", []),
+        "rewards": [r for r in s.get("loyalty_rewards", []) if r.get("enabled", True)],
+    }
+
+
+@api.get("/loyalty/me")
+async def loyalty_me(user: dict = Depends(get_current_user)):
+    s = await db.settings.find_one({"_id": "site"}) or {}
+    tiers = s.get("loyalty_tiers", [])
+    lifetime = int(user.get("loyalty_lifetime", 0))
+    points = int(user.get("loyalty_points", 0))
+    current, nxt = _loyalty_tier(lifetime, tiers)
+    # personal reward codes still active
+    codes = await db.promo_codes.find({"source": "loyalty", "user_id": str(user["_id"])}).sort("created_at", -1).to_list(50)
+    return {
+        "enabled": s.get("loyalty_enabled", True),
+        "points": points,
+        "lifetime": lifetime,
+        "points_per_100da": s.get("loyalty_points_per_100da", 1),
+        "tier": current,
+        "next_tier": nxt,
+        "tiers": tiers,
+        "rewards": [r for r in s.get("loyalty_rewards", []) if r.get("enabled", True)],
+        "my_codes": [clean(c) for c in codes],
+    }
+
+
+@api.post("/loyalty/redeem")
+async def loyalty_redeem(payload: dict, user: dict = Depends(get_current_user)):
+    s = await db.settings.find_one({"_id": "site"}) or {}
+    if not s.get("loyalty_enabled", True):
+        raise HTTPException(status_code=400, detail="Programme de fidélité désactivé")
+    reward_id = payload.get("reward_id")
+    reward = next((r for r in s.get("loyalty_rewards", []) if r.get("id") == reward_id and r.get("enabled", True)), None)
+    if not reward:
+        raise HTTPException(status_code=404, detail="Récompense introuvable")
+    balance = int(user.get("loyalty_points", 0))
+    cost = int(reward.get("points", 0))
+    if balance < cost:
+        raise HTTPException(status_code=400, detail="Points insuffisants")
+    code = "FID-" + secrets.token_hex(3).upper()
+    await db.promo_codes.insert_one({
+        "code": code, "type": reward.get("type", "fixed"), "value": reward.get("value", 0),
+        "active": True, "single_use": True, "source": "loyalty", "user_id": str(user["_id"]),
+        "reward_label": reward.get("label", ""), "created_at": now_utc().isoformat(),
+    })
+    await db.users.update_one({"_id": user["_id"]}, {"$inc": {"loyalty_points": -cost}})
+    return {"ok": True, "code": code, "reward": reward, "remaining_points": balance - cost}
+
+
+# ----------------------------------------------------------------------------
+# Live chat (internal)
+# ----------------------------------------------------------------------------
+async def _get_optional_user(request: Request):
+    try:
+        return await get_current_user(request)
+    except HTTPException:
+        return None
+
+
+@api.post("/chat/start")
+async def chat_start(payload: dict, request: Request):
+    user = await _get_optional_user(request)
+    name = (payload.get("name") or (user and f"{user.get('first_name','')} {user.get('last_name','')}".strip()) or "Visiteur").strip()
+    email = (payload.get("email") or (user and user.get("email")) or "").strip().lower() or None
+    now = now_utc().isoformat()
+    conv = {
+        "name": name, "email": email,
+        "user_id": str(user["_id"]) if user else None,
+        "status": "open", "unread_admin": 0, "unread_user": 0,
+        "created_at": now, "last_message_at": now,
+    }
+    res = await db.chat_conversations.insert_one(conv)
+    conv["_id"] = res.inserted_id
+    return clean(conv)
+
+
+@api.get("/chat/{conv_id}/messages")
+async def chat_messages(conv_id: str, request: Request):
+    if not ObjectId.is_valid(conv_id):
+        raise HTTPException(status_code=404, detail="Conversation introuvable")
+    msgs = await db.chat_messages.find({"conversation_id": conv_id}).sort("created_at", 1).to_list(500)
+    # mark admin messages as read by the user
+    await db.chat_messages.update_many({"conversation_id": conv_id, "sender": "admin", "read": False}, {"$set": {"read": True}})
+    await db.chat_conversations.update_one({"_id": ObjectId(conv_id)}, {"$set": {"unread_user": 0}})
+    return [clean(m) for m in msgs]
+
+
+@api.post("/chat/{conv_id}/message")
+async def chat_post_message(conv_id: str, payload: dict):
+    if not ObjectId.is_valid(conv_id):
+        raise HTTPException(status_code=404, detail="Conversation introuvable")
+    conv = await db.chat_conversations.find_one({"_id": ObjectId(conv_id)})
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation introuvable")
+    text = (payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Message vide")
+    now = now_utc().isoformat()
+    await db.chat_messages.insert_one({
+        "conversation_id": conv_id, "sender": "user", "text": text, "read": False, "created_at": now,
+    })
+    await db.chat_conversations.update_one({"_id": ObjectId(conv_id)},
+        {"$set": {"last_message_at": now, "status": "open"}, "$inc": {"unread_admin": 1}})
+    await db.notifications.insert_one({
+        "type": "chat", "conversation_id": conv_id,
+        "message": f"Nouveau message chat de {conv.get('name','Visiteur')}",
+        "read": False, "created_at": now,
+    })
+    return {"ok": True}
+
+
+@api.get("/admin/chat/conversations")
+async def admin_chat_conversations(admin: dict = Depends(get_admin_user)):
+    convs = await db.chat_conversations.find({}).sort("last_message_at", -1).to_list(300)
+    return [clean(c) for c in convs]
+
+
+@api.get("/admin/chat/{conv_id}/messages")
+async def admin_chat_messages(conv_id: str, admin: dict = Depends(get_admin_user)):
+    if not ObjectId.is_valid(conv_id):
+        raise HTTPException(status_code=404, detail="Conversation introuvable")
+    msgs = await db.chat_messages.find({"conversation_id": conv_id}).sort("created_at", 1).to_list(500)
+    await db.chat_messages.update_many({"conversation_id": conv_id, "sender": "user", "read": False}, {"$set": {"read": True}})
+    await db.chat_conversations.update_one({"_id": ObjectId(conv_id)}, {"$set": {"unread_admin": 0}})
+    return [clean(m) for m in msgs]
+
+
+@api.post("/admin/chat/{conv_id}/reply")
+async def admin_chat_reply(conv_id: str, payload: dict, admin: dict = Depends(get_admin_user)):
+    if not ObjectId.is_valid(conv_id):
+        raise HTTPException(status_code=404, detail="Conversation introuvable")
+    text = (payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Message vide")
+    now = now_utc().isoformat()
+    await db.chat_messages.insert_one({
+        "conversation_id": conv_id, "sender": "admin", "text": text, "read": False, "created_at": now,
+    })
+    await db.chat_conversations.update_one({"_id": ObjectId(conv_id)},
+        {"$set": {"last_message_at": now}, "$inc": {"unread_user": 1}})
+    return {"ok": True}
+
+
+@api.get("/admin/chat/unread-count")
+async def admin_chat_unread(admin: dict = Depends(get_admin_user)):
+    convs = await db.chat_conversations.find({"unread_admin": {"$gt": 0}}).to_list(500)
+    return {"count": sum(c.get("unread_admin", 0) for c in convs), "conversations": len(convs)}
 
 
 # ----------------------------------------------------------------------------
@@ -1526,6 +1748,38 @@ DEFAULT_SETTINGS = {
     "hero_image": None,
     "hero_title": "Prenez soin de votre peau & santé au meilleur prix",
     "hero_subtitle": "Cosmétiques et soins 100% originaux, livrés partout en Algérie. Payez à la livraison, en toute confiance.",
+    "footer_about": "Pharma360 est votre parapharmacie en ligne de confiance en Algérie. Nous proposons des produits 100% originaux : soins, cosmétiques, compléments et bien-être, livrés partout en Algérie avec paiement à la livraison.",
+    "whatsapp_url": "",
+    "footer_news_links": [
+        {"id": "n1", "label": "Idées cadeaux", "target": "/page/idees-cadeaux", "enabled": True},
+        {"id": "n2", "label": "Carte cadeau", "target": "/page/carte-cadeau", "enabled": True},
+        {"id": "n3", "label": "Soldes", "target": "/catalogue?on_promo=1", "enabled": True},
+        {"id": "n4", "label": "Programme de fidélité", "target": "/fidelite", "enabled": True},
+    ],
+    "footer_help_links": [
+        {"id": "h1", "label": "FAQ", "target": "/page/faq", "enabled": True},
+        {"id": "h2", "label": "Modes de paiement acceptés", "target": "/page/modes-paiement", "enabled": True},
+        {"id": "h3", "label": "Retourner un produit", "target": "/page/retour-produit", "enabled": True},
+        {"id": "h4", "label": "Conditions de livraison", "target": "/page/conditions-livraison", "enabled": True},
+        {"id": "h5", "label": "Conditions de nos offres exclusives / promos", "target": "/page/conditions-promos", "enabled": True},
+        {"id": "h6", "label": "Rappel produit", "target": "/page/rappel-produit", "enabled": True},
+        {"id": "h7", "label": "Confidentialité", "target": "/confidentialite", "enabled": True},
+        {"id": "h8", "label": "CGV", "target": "/cgv", "enabled": True},
+    ],
+    "loyalty_enabled": True,
+    "loyalty_points_per_100da": 1,
+    "loyalty_tiers": [
+        {"name": "Bronze", "min": 0},
+        {"name": "Argent", "min": 500},
+        {"name": "Or", "min": 1500},
+    ],
+    "loyalty_rewards": [
+        {"id": "r1", "label": "Bon de 500 DA", "points": 500, "type": "fixed", "value": 500, "enabled": True},
+        {"id": "r2", "label": "10% de réduction", "points": 800, "type": "percent", "value": 10, "enabled": True},
+        {"id": "r3", "label": "Bon de 1500 DA", "points": 1200, "type": "fixed", "value": 1500, "enabled": True},
+    ],
+    "theme_mode": "auto",
+    "theme_manual": "spring",
     "top_bar_messages": [
         "Livraison rapide dans toutes les wilayas d'Algérie",
         "Produits 100% Originaux & Authentiques",
@@ -1715,6 +1969,15 @@ async def ensure_settings():
         await db.settings.update_one({"_id": "site"},
                                      {"$set": {"payment_card_enabled": False, "payment_baridimob_enabled": True}}, upsert=True)
         await db.meta.insert_one({"_id": "payment_v2", "created_at": now_utc().isoformat()})
+    # one-time: point the "Programme de fidélité" footer link to the /fidelite page
+    if not await db.meta.find_one({"_id": "loyalty_v1"}):
+        doc = await db.settings.find_one({"_id": "site"}) or {}
+        news = doc.get("footer_news_links") or []
+        for l in news:
+            if l.get("id") == "n4":
+                l["target"] = "/fidelite"
+        await db.settings.update_one({"_id": "site"}, {"$set": {"footer_news_links": news}})
+        await db.meta.insert_one({"_id": "loyalty_v1", "created_at": now_utc().isoformat()})
 
 
 @api.get("/settings")
@@ -1733,6 +1996,94 @@ async def update_settings(payload: dict, admin: dict = Depends(get_admin_user)):
     doc = await db.settings.find_one({"_id": "site"})
     doc.pop("_id", None)
     return doc
+
+
+# ----------------------------------------------------------------------------
+# CMS pages (editable footer/content pages)
+# ----------------------------------------------------------------------------
+def _slugify(text: str) -> str:
+    import re, unicodedata
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    text = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
+    return text or "page"
+
+
+class PageInput(BaseModel):
+    title: str
+    slug: Optional[str] = None
+    content: str = ""
+    enabled: bool = True
+
+
+CMS_PAGES_SEED = [
+    ("idees-cadeaux", "Idées cadeaux", "Offrez le bien-être avec nos idées cadeaux Pharma360 : coffrets soins, cosmétiques et produits de bien-être sélectionnés par nos pharmaciens. Contactez-nous pour des conseils personnalisés."),
+    ("carte-cadeau", "Carte cadeau", "La carte cadeau Pharma360 est le cadeau idéal ! Faites plaisir à vos proches en leur offrant une carte cadeau utilisable sur l'ensemble de notre boutique. Contactez notre service client pour en savoir plus."),
+    ("programme-fidelite", "Programme de fidélité", "Cumulez des points à chaque achat et bénéficiez d'avantages exclusifs. Plus vous commandez, plus vous gagnez ! Découvrez bientôt tous les détails de notre programme de fidélité."),
+    ("faq", "FAQ — Questions fréquentes", "Retrouvez ici les réponses aux questions les plus fréquentes sur nos produits, la livraison, le paiement et les retours. Une question ? Notre service client est disponible 7j/7."),
+    ("modes-paiement", "Modes de paiement acceptés", "Nous acceptons le paiement à la livraison (espèces) ainsi que le paiement via BaridiMob. Payez en toute sécurité et en toute confiance."),
+    ("retour-produit", "Retourner un produit", "Vous pouvez retourner un produit sous 7 jours s'il est non ouvert et dans son emballage d'origine. Contactez notre service client pour organiser le retour."),
+    ("conditions-livraison", "Conditions de livraison", "La livraison est assurée dans les 58 wilayas d'Algérie sous 24 à 48h. Les frais de livraison varient selon la wilaya et le mode choisi (à domicile ou en point relais)."),
+    ("conditions-promos", "Conditions de nos offres exclusives / promos", "Nos offres promotionnelles sont valables dans la limite des stocks disponibles et pour une durée déterminée. Elles ne sont pas cumulables sauf mention contraire."),
+    ("rappel-produit", "Rappel produit", "La sécurité de nos clients est notre priorité. Retrouvez ici les éventuels rappels de produits. Aucun rappel en cours actuellement."),
+]
+
+
+async def ensure_cms_pages():
+    if await db.meta.find_one({"_id": "cms_v1"}):
+        return
+    for slug, title, content in CMS_PAGES_SEED:
+        if not await db.cms_pages.find_one({"slug": slug}):
+            await db.cms_pages.insert_one({
+                "slug": slug, "title": title, "content": content,
+                "enabled": True, "updated_at": now_utc().isoformat(),
+            })
+    await db.meta.insert_one({"_id": "cms_v1", "created_at": now_utc().isoformat()})
+
+
+@api.get("/pages/{slug}")
+async def get_page(slug: str):
+    doc = await db.cms_pages.find_one({"slug": slug})
+    if not doc or not doc.get("enabled", True):
+        raise HTTPException(status_code=404, detail="Page introuvable")
+    return clean(doc)
+
+
+@api.get("/admin/pages")
+async def admin_list_pages(admin: dict = Depends(get_admin_user)):
+    cursor = db.cms_pages.find({}).sort("title", 1)
+    return [clean(d) for d in await cursor.to_list(500)]
+
+
+@api.post("/admin/pages")
+async def admin_create_page(data: PageInput, admin: dict = Depends(get_admin_user)):
+    slug = _slugify(data.slug or data.title)
+    if await db.cms_pages.find_one({"slug": slug}):
+        slug = f"{slug}-{secrets.token_hex(3)}"
+    doc = {"slug": slug, "title": data.title, "content": data.content,
+           "enabled": data.enabled, "updated_at": now_utc().isoformat()}
+    res = await db.cms_pages.insert_one(doc)
+    doc["_id"] = res.inserted_id
+    return clean(doc)
+
+
+@api.put("/admin/pages/{page_id}")
+async def admin_update_page(page_id: str, data: PageInput, admin: dict = Depends(get_admin_user)):
+    if not ObjectId.is_valid(page_id):
+        raise HTTPException(status_code=404, detail="Page introuvable")
+    update = {"title": data.title, "content": data.content, "enabled": data.enabled,
+              "updated_at": now_utc().isoformat()}
+    if data.slug:
+        update["slug"] = _slugify(data.slug)
+    await db.cms_pages.update_one({"_id": ObjectId(page_id)}, {"$set": update})
+    doc = await db.cms_pages.find_one({"_id": ObjectId(page_id)})
+    return clean(doc)
+
+
+@api.delete("/admin/pages/{page_id}")
+async def admin_delete_page(page_id: str, admin: dict = Depends(get_admin_user)):
+    if ObjectId.is_valid(page_id):
+        await db.cms_pages.delete_one({"_id": ObjectId(page_id)})
+    return {"ok": True}
 
 
 # ----------------------------------------------------------------------------
@@ -1796,6 +2147,7 @@ async def startup():
         logger.error(f"Storage init failed: {e}")
     await seed()
     await ensure_settings()
+    await ensure_cms_pages()
     await ensure_category_tree()
     await ensure_wilayas()
     try:

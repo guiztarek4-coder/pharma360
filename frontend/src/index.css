@@ -46,6 +46,37 @@ h1, h2, h3, h4, .font-display {
         --input: 214 32% 91%;
         --ring: 160 84% 39%;
         --radius: 0.85rem;
+
+        /* Default brand palette (Emerald) */
+        --mint-50: #ECFDF5; --mint-100: #D1FAE5; --mint-200: #A7F3D0; --mint-300: #6EE7B7;
+        --mint-400: #34D399; --mint-500: #10B981; --mint-600: #059669; --mint-700: #047857;
+        --mint-800: #065F46; --mint-900: #064E3B;
+    }
+
+    /* Seasonal themes — override the brand palette */
+    .theme-spring {
+        --mint-50: #F0FDF4; --mint-100: #DCFCE7; --mint-200: #BBF7D0; --mint-300: #86EFAC;
+        --mint-400: #4ADE80; --mint-500: #22C55E; --mint-600: #16A34A; --mint-700: #15803D;
+        --mint-800: #166534; --mint-900: #14532D;
+        --primary: 142 71% 45%; --ring: 142 71% 45%;
+    }
+    .theme-summer {
+        --mint-50: #ECFEFF; --mint-100: #CFFAFE; --mint-200: #A5F3FC; --mint-300: #67E8F9;
+        --mint-400: #22D3EE; --mint-500: #06B6D4; --mint-600: #0891B2; --mint-700: #0E7490;
+        --mint-800: #155E75; --mint-900: #164E63;
+        --primary: 192 91% 36%; --ring: 192 91% 36%;
+    }
+    .theme-autumn {
+        --mint-50: #FFF7ED; --mint-100: #FFEDD5; --mint-200: #FED7AA; --mint-300: #FDBA74;
+        --mint-400: #FB923C; --mint-500: #F97316; --mint-600: #EA580C; --mint-700: #C2410C;
+        --mint-800: #9A3412; --mint-900: #7C2D12;
+        --primary: 21 90% 48%; --ring: 21 90% 48%;
+    }
+    .theme-winter {
+        --mint-50: #EFF6FF; --mint-100: #DBEAFE; --mint-200: #BFDBFE; --mint-300: #93C5FD;
+        --mint-400: #60A5FA; --mint-500: #3B82F6; --mint-600: #2563EB; --mint-700: #1D4ED8;
+        --mint-800: #1E40AF; --mint-900: #1E3A8A;
+        --primary: 217 91% 60%; --ring: 217 91% 60%;
     }
 }
 

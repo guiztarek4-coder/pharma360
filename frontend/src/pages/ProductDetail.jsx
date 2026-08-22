@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ShoppingCart, Plus, Minus, ShieldCheck, Truck, CreditCard, ChevronRight, Check, Star } from "lucide-react";
+import { ShoppingCart, Plus, Minus, ShieldCheck, Truck, CreditCard, ChevronRight, Check, Star, Heart } from "lucide-react";
 import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
 import { useCart } from "@/context/CartContext";
+import { useFavorites } from "@/context/FavoritesContext";
 import { useCategories } from "@/context/CategoriesContext";
 import { toast } from "sonner";
 
@@ -80,6 +81,7 @@ function Reviews({ productId }) {
 export default function ProductDetail() {
   const { id } = useParams();
   const { addItem } = useCart();
+  const { isFavorite, toggleFavorite } = useFavorites();
   const { getAncestors, flat } = useCategories();
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
@@ -169,6 +171,10 @@ export default function ProductDetail() {
             <button onClick={() => addItem(product, qty)} disabled={product.stock <= 0} data-testid="product-add-to-cart"
               className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold shadow-lg shadow-mint-600/30 transition-colors disabled:opacity-40">
               <ShoppingCart className="w-5 h-5" /> Ajouter au panier
+            </button>
+            <button onClick={() => toggleFavorite(product)} data-testid="product-fav-btn" aria-label="Favoris"
+              className={`w-14 shrink-0 grid place-items-center rounded-full border transition-colors ${isFavorite(product.id) ? "bg-red-500 border-red-500 text-white" : "border-mint-200 text-slate-500 hover:text-red-500 hover:border-red-300"}`}>
+              <Heart className="w-5 h-5" fill={isFavorite(product.id) ? "currentColor" : "none"} />
             </button>
           </div>
 

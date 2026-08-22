@@ -25,6 +25,7 @@ export default function Checkout() {
   const [loggingIn, setLoggingIn] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLink, setForgotLink] = useState("");
   const [form, setForm] = useState({
     full_name: user ? `${user.first_name} ${user.last_name}` : "",
     phone: user?.phone || "",
@@ -87,8 +88,12 @@ export default function Checkout() {
     e.preventDefault();
     try {
       const { data } = await api.post("/auth/forgot-password", { email: forgotEmail });
-      toast.success(data.message || "Email envoyé si le compte existe.");
-      setShowForgot(false); setForgotEmail("");
+      if (data.reset_link) {
+        setForgotLink(data.reset_link);
+        toast.success("Lien de réinitialisation prêt");
+      } else {
+        toast.success(data.message || "Aucun compte trouvé pour cet email.");
+      }
     } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
   };
 
@@ -169,25 +174,32 @@ export default function Checkout() {
                   <LogIn className="w-4 h-4" /> Déjà client ? Cliquez ici pour vous connecter
                 </button>
               ) : showForgot ? (
-                <form onSubmit={doForgot} className="space-y-3">
+                <div className="space-y-3">
                   <p className="text-sm font-semibold text-slate-dark">Mot de passe oublié</p>
                   <input type="email" required value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="Votre email" data-testid="checkout-forgot-email" className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
-                  <div className="flex gap-2">
-                    <button type="submit" data-testid="checkout-forgot-submit" className="px-5 py-2 rounded-full bg-mint-600 text-white font-semibold text-sm">Envoyer le lien</button>
-                    <button type="button" onClick={() => setShowForgot(false)} className="text-sm text-slate-500">Retour</button>
-                  </div>
-                </form>
+                  {forgotLink ? (
+                    <div className="p-3 rounded-xl bg-white border border-mint-200 space-y-2" data-testid="checkout-reset-link-box">
+                      <p className="text-sm text-slate-600">Votre lien est prêt :</p>
+                      <a href={forgotLink} data-testid="checkout-reset-link-btn" className="inline-block px-5 py-2 rounded-full bg-mint-600 text-white font-semibold text-sm">Créer un nouveau mot de passe</a>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button type="button" onClick={doForgot} data-testid="checkout-forgot-submit" className="px-5 py-2 rounded-full bg-mint-600 text-white font-semibold text-sm">Obtenir le lien</button>
+                      <button type="button" onClick={() => { setShowForgot(false); setForgotLink(""); }} className="text-sm text-slate-500">Retour</button>
+                    </div>
+                  )}
+                </div>
               ) : (
-                <form onSubmit={doQuickLogin} className="space-y-3">
+                <div className="space-y-3">
                   <p className="text-sm font-semibold text-slate-dark flex items-center gap-2"><User className="w-4 h-4 text-mint-600" /> Connexion</p>
                   <input value={loginData.identifier} onChange={(e) => setLoginData({ ...loginData, identifier: e.target.value })} placeholder="Email ou téléphone" data-testid="checkout-login-email" className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
                   <input type="password" value={loginData.password} onChange={(e) => setLoginData({ ...loginData, password: e.target.value })} placeholder="Mot de passe" data-testid="checkout-login-password" className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
                   <div className="flex items-center gap-3 flex-wrap">
-                    <button type="submit" disabled={loggingIn} data-testid="checkout-login-submit" className="px-5 py-2 rounded-full bg-mint-600 text-white font-semibold text-sm disabled:opacity-60">{loggingIn ? "…" : "Se connecter"}</button>
+                    <button type="button" onClick={doQuickLogin} disabled={loggingIn} data-testid="checkout-login-submit" className="px-5 py-2 rounded-full bg-mint-600 text-white font-semibold text-sm disabled:opacity-60">{loggingIn ? "…" : "Se connecter"}</button>
                     <button type="button" onClick={() => setShowForgot(true)} data-testid="checkout-forgot-toggle" className="text-sm text-mint-700 underline">Mot de passe oublié ?</button>
                     <button type="button" onClick={() => setShowLogin(false)} className="text-sm text-slate-500 ml-auto">Continuer sans compte</button>
                   </div>
-                </form>
+                </div>
               )}
             </div>
           )}

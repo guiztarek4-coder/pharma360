@@ -1,0 +1,25 @@
+{
+  "summary": "RETEST of 2 bugs from iteration_11: (1) Checkout nested-form bug fixed — forgot-password AND quick-login now work inside the checkout page without submitting outer order form. (2) Favorites panel now refreshes immediately after removal from Dashboard. All 3 requested flows PASS.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Checkout /commande", "issues": ["React hydration warning: <span> cannot be child of <option> in the wilaya <select> (checkout-wilaya). Caused by preview instrumentation wrapping dynamic text in a <span>. Non-blocking but noisy in console."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_favorites_and_forgot.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Checkout.jsx fix looks correct: inner <form>s replaced by <div>s and buttons are type='button' with explicit onClick={doForgot}/{doQuickLogin}. Note: doForgot/doQuickLogin still call e.preventDefault() but receive a click event — harmless since preventDefault exists on click events, just unnecessary.",
+    "Wilaya <option> renders raw dynamic text through preview instrumentation which injects a <span>; consider wrapping content differently or ignoring since it's dev-only preview noise."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (not retested per request)", "frontend": "100% (3/3 flows)"},
+  "test_credentials": "Admin: pharmacie360benak@gmail.com / Aminetarek1992*. Created ephemeral customer testcheckout89707@test.com / password123 for quick-login + favorites test.",
+  "seed_data_creation": "1 test customer via POST /api/auth/register.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Both iteration_11 bugs verified fixed. TEST1: /commande forgot-password shows checkout-reset-link-box (with checkout-reset-link-btn) without URL change. TEST2: /commande quick-login logs in, hides quick-login widget, pre-fills checkout-name and checkout-email with the customer's data, URL stays on /commande. TEST3: removing a favorite via product-card-fav-* inside favorites-panel makes the product disappear immediately (Dashboard re-fetch on favIds change works).",
+  "rca of the issue": "Previously nested <form> elements were silently stripped by the browser, causing inner submit buttons to trigger the outer order form. Fix: converted inner login/forgot containers to <div> and switched buttons to type='button' with onClick handlers. Favorites panel bug fixed via useEffect refetch of /favorites when favIds change in useFavorites context."
+}

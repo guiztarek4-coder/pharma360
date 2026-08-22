@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { LayoutDashboard, Package, ShoppingBag, Tag, FileText, LogOut, Plus, Pencil, Trash2, X, Upload, TrendingUp, Users, Leaf, Settings, FolderTree, Ticket, Bell, Image as ImageIcon, UserCog, ChevronRight, GripVertical, Download, FileSpreadsheet, AlertCircle, AlertTriangle, Truck, MapPin, Compass } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Tag, FileText, LogOut, Plus, Pencil, Trash2, X, Upload, TrendingUp, Users, Leaf, Settings, FolderTree, Ticket, Bell, Image as ImageIcon, UserCog, ChevronRight, GripVertical, Download, FileSpreadsheet, AlertCircle, AlertTriangle, Truck, MapPin, Compass, PanelBottom, ExternalLink, Gift, MessageCircle, Send } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -208,7 +208,7 @@ function Dashboard() {
   const [customers, setCustomers] = useState([]);
   const [promos, setPromos] = useState([]);
   const [notifs, setNotifs] = useState({ notifications: [], unread: 0 });
-  const [editing, setEditing] = useState(null);
+  const [chatUnread, setChatUnread] = useState(0);  const [editing, setEditing] = useState(null);
   const [importKind, setImportKind] = useState(null);
   const [lowOnly, setLowOnly] = useState(false);
   const [brandForm, setBrandForm] = useState(null);
@@ -223,6 +223,7 @@ function Dashboard() {
     api.get("/customers").then((r) => setCustomers(r.data));
     api.get("/promo-codes").then((r) => setPromos(r.data));
     api.get("/notifications").then((r) => setNotifs(r.data));
+    api.get("/admin/chat/unread-count").then((r) => setChatUnread(r.data.count || 0)).catch(() => {});
     refreshCats();
   };
   useEffect(loadAll, []);
@@ -242,9 +243,12 @@ function Dashboard() {
     { id: "categories", label: "Catégories", icon: FolderTree },
     { id: "delivery", label: "Livraison", icon: Truck },
     { id: "promo", label: "Codes promo", icon: Ticket },
+    { id: "loyalty", label: "Fidélité", icon: Gift },
     { id: "blog", label: "Blog", icon: FileText },
     { id: "banners", label: "Bannières", icon: ImageIcon },
+    { id: "footer", label: "Footer & Pages", icon: PanelBottom },
     { id: "notifications", label: "Notifications", icon: Bell },
+    { id: "chat", label: "Chat", icon: MessageCircle },
     { id: "settings", label: "Paramètres", icon: Settings },
     { id: "account", label: "Compte", icon: UserCog },
   ];
@@ -264,6 +268,7 @@ function Dashboard() {
               <t.icon className="w-4 h-4" /> {t.label}
               {t.id === "notifications" && notifs.unread > 0 && <span className="ml-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] grid place-items-center">{notifs.unread}</span>}
               {t.id === "products" && stats?.low_stock > 0 && <span data-testid="products-low-stock-badge" className={`ml-1 w-5 h-5 rounded-full text-[10px] grid place-items-center ${tab === t.id ? "bg-white/25 text-white" : "bg-red-500 text-white"}`}>{stats.low_stock}</span>}
+              {t.id === "chat" && chatUnread > 0 && <span data-testid="chat-unread-badge" className="ml-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] grid place-items-center">{chatUnread}</span>}
             </button>
           ))}
         </div>
@@ -366,6 +371,7 @@ function Dashboard() {
         {tab === "categories" && <CategoriesPanel categories={categories} onChanged={loadAll} onImport={() => setImportKind("categories")} />}
         {tab === "delivery" && <DeliveryPanel />}
         {tab === "promo" && <PromoPanel promos={promos} onChanged={loadAll} />}
+        {tab === "loyalty" && <LoyaltyAdminPanel />}
 
         {tab === "blog" && (
           <div>
@@ -382,7 +388,9 @@ function Dashboard() {
         )}
 
         {tab === "banners" && <BannersPanel />}
+        {tab === "footer" && <FooterPanel />}
         {tab === "notifications" && <NotificationsPanel notifs={notifs} />}
+        {tab === "chat" && <ChatAdminPanel />}
         {tab === "settings" && <SettingsPanel />}
         {tab === "account" && <AccountPanel />}
       </div>
@@ -863,6 +871,269 @@ function WilayaEditor({ w, onClose, onSaved }) {
 }
 
 
+function LinksEditor({ title, links, onChange, pageOptions, testidPrefix }) {
+  const update = (i, patch) => { const arr = [...links]; arr[i] = { ...arr[i], ...patch }; onChange(arr); };
+  const del = (i) => onChange(links.filter((_, x) => x !== i));
+  const add = () => onChange([...links, { id: `l${Date.now()}`, label: "Nouveau lien", target: "/page/", enabled: true }]);
+  return (
+    <div>
+      <h4 className="font-semibold text-sm mb-2">{title}</h4>
+      <div className="space-y-2">
+        {links.map((l, i) => (
+          <div key={l.id} className="flex flex-wrap items-center gap-2 bg-mint-50/40 rounded-xl p-2" data-testid={`${testidPrefix}-row-${i}`}>
+            <input type="checkbox" checked={l.enabled !== false} onChange={(e) => update(i, { enabled: e.target.checked })} className="accent-mint-600 w-4 h-4" title="Activer/désactiver" data-testid={`${testidPrefix}-enabled-${i}`} />
+            <input value={l.label} onChange={(e) => update(i, { label: e.target.value })} placeholder="Libellé" className={`${inp} flex-1 min-w-[140px]`} data-testid={`${testidPrefix}-label-${i}`} />
+            <input value={l.target} onChange={(e) => update(i, { target: e.target.value })} placeholder="/page/slug ou https://..." list="footer-page-targets" className={`${inp} flex-1 min-w-[160px]`} data-testid={`${testidPrefix}-target-${i}`} />
+            <button onClick={() => del(i)} className="text-slate-400 hover:text-red-500 px-1" data-testid={`${testidPrefix}-del-${i}`}><Trash2 className="w-4 h-4" /></button>
+          </div>
+        ))}
+        <datalist id="footer-page-targets">
+          {(pageOptions || []).map((p) => <option key={p.slug} value={`/page/${p.slug}`}>{p.title}</option>)}
+          <option value="/confidentialite">Confidentialité</option>
+          <option value="/cgv">CGV</option>
+          <option value="/catalogue?on_promo=1">Soldes</option>
+        </datalist>
+        <button onClick={add} className="flex items-center gap-1.5 text-mint-700 text-sm font-semibold" data-testid={`${testidPrefix}-add`}><Plus className="w-4 h-4" /> Ajouter un lien</button>
+      </div>
+    </div>
+  );
+}
+
+function PageEditModal({ page, onClose, onSaved }) {
+  const [f, setF] = useState(page || { title: "", slug: "", content: "", enabled: true });
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (!f.title) { toast.error("Titre requis"); return; }
+    setBusy(true);
+    try {
+      const payload = { title: f.title, slug: f.slug || undefined, content: f.content || "", enabled: f.enabled !== false };
+      if (f.id) await api.put(`/admin/pages/${f.id}`, payload);
+      else await api.post("/admin/pages", payload);
+      toast.success("Page enregistrée"); onSaved();
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Modal title={f.id ? "Modifier la page" : "Nouvelle page"} onClose={onClose}>
+      <L label="Titre"><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} className={inp} data-testid="page-title-input" /></L>
+      <div className="mt-3"><L label="Slug (URL) — laisser vide pour générer automatiquement"><input value={f.slug || ""} onChange={(e) => setF({ ...f, slug: e.target.value })} placeholder="ex: faq" className={inp} data-testid="page-slug-input" /></L></div>
+      <div className="mt-3"><L label="Contenu de la page"><textarea rows={10} value={f.content || ""} onChange={(e) => setF({ ...f, content: e.target.value })} className={inp} data-testid="page-content-input" /></L></div>
+      <label className="flex items-center gap-2 text-sm mt-3"><input type="checkbox" checked={f.enabled !== false} onChange={(e) => setF({ ...f, enabled: e.target.checked })} className="accent-mint-600 w-4 h-4" data-testid="page-enabled-input" /> Page visible (activée)</label>
+      <button onClick={save} disabled={busy} data-testid="page-save" className="w-full mt-4 py-3 rounded-full bg-mint-600 text-white font-semibold disabled:opacity-50">{busy ? "…" : "Enregistrer"}</button>
+    </Modal>
+  );
+}
+
+function ChatAdminPanel() {
+  const [convs, setConvs] = useState([]);
+  const [sel, setSel] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState("");
+  const bottomRef = useRef(null);
+  const pollRef = useRef(null);
+
+  const loadConvs = () => api.get("/admin/chat/conversations").then((r) => setConvs(r.data)).catch(() => {});
+  const loadMsgs = (id) => api.get(`/admin/chat/${id}/messages`).then((r) => setMessages(r.data)).catch(() => {});
+
+  useEffect(() => { loadConvs(); const t = setInterval(loadConvs, 6000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    if (sel) { loadMsgs(sel.id); pollRef.current = setInterval(() => loadMsgs(sel.id), 4000); return () => clearInterval(pollRef.current); }
+  }, [sel]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  const reply = async () => {
+    const t = text.trim(); if (!t || !sel) return;
+    setText("");
+    try { await api.post(`/admin/chat/${sel.id}/reply`, { text: t }); await loadMsgs(sel.id); loadConvs(); } catch {}
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden grid md:grid-cols-3 h-[600px]" data-testid="admin-chat-panel">
+      <div className="border-r border-slate-100 overflow-auto" data-testid="chat-conv-list">
+        {convs.length === 0 && <p className="text-slate-400 text-sm p-4">Aucune conversation.</p>}
+        {convs.map((c) => (
+          <button key={c.id} onClick={() => setSel(c)} data-testid={`chat-conv-${c.id}`}
+            className={`w-full text-left px-4 py-3 border-b border-slate-50 hover:bg-mint-50/50 ${sel?.id === c.id ? "bg-mint-50" : ""}`}>
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-sm truncate">{c.name || "Visiteur"}</span>
+              {c.unread_admin > 0 && <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] grid place-items-center shrink-0">{c.unread_admin}</span>}
+            </div>
+            <div className="text-xs text-slate-400 truncate">{c.email || "—"}</div>
+            <div className="text-[11px] text-slate-400">{new Date(c.last_message_at).toLocaleString("fr-FR")}</div>
+          </button>
+        ))}
+      </div>
+      <div className="md:col-span-2 flex flex-col">
+        {!sel ? (
+          <div className="flex-1 grid place-items-center text-slate-400 text-sm">Sélectionnez une conversation</div>
+        ) : (
+          <>
+            <div className="px-5 py-3 border-b border-slate-100"><div className="font-semibold text-sm">{sel.name}</div><div className="text-xs text-slate-400">{sel.email || "—"}</div></div>
+            <div className="flex-1 overflow-auto p-4 space-y-3 bg-mint-50/20" data-testid="chat-admin-messages">
+              {messages.map((m) => (
+                <div key={m.id} className={`flex ${m.sender === "admin" ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${m.sender === "admin" ? "bg-mint-600 text-white rounded-br-sm" : "bg-white border border-slate-200 text-slate-700 rounded-bl-sm"}`}>{m.text}</div>
+                </div>
+              ))}
+              <div ref={bottomRef} />
+            </div>
+            <div className="p-3 border-t border-slate-100 flex items-center gap-2">
+              <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && reply()} placeholder="Votre réponse…" data-testid="chat-admin-input" className={`${inp} rounded-full`} />
+              <button onClick={reply} data-testid="chat-admin-send" className="w-10 h-10 rounded-full bg-mint-600 text-white grid place-items-center shrink-0"><Send className="w-4 h-4" /></button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LoyaltyAdminPanel() {
+  const { refresh } = useSettings();
+  const [f, setF] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api.get("/settings").then((r) => setF(r.data)); }, []);
+  if (!f) return <p className="text-slate-400">Chargement…</p>;
+
+  const tiers = f.loyalty_tiers || [];
+  const rewards = f.loyalty_rewards || [];
+  const setTier = (i, patch) => { const a = [...tiers]; a[i] = { ...a[i], ...patch }; setF({ ...f, loyalty_tiers: a }); };
+  const addTier = () => setF({ ...f, loyalty_tiers: [...tiers, { name: "Nouveau", min: 0 }] });
+  const delTier = (i) => setF({ ...f, loyalty_tiers: tiers.filter((_, x) => x !== i) });
+  const setRw = (i, patch) => { const a = [...rewards]; a[i] = { ...a[i], ...patch }; setF({ ...f, loyalty_rewards: a }); };
+  const addRw = () => setF({ ...f, loyalty_rewards: [...rewards, { id: `r${Date.now()}`, label: "Nouvelle récompense", points: 500, type: "fixed", value: 500, enabled: true }] });
+  const delRw = (i) => setF({ ...f, loyalty_rewards: rewards.filter((_, x) => x !== i) });
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.put("/settings", {
+        loyalty_enabled: f.loyalty_enabled, loyalty_points_per_100da: Number(f.loyalty_points_per_100da) || 1,
+        loyalty_tiers: tiers.map((t) => ({ name: t.name, min: Number(t.min) || 0 })),
+        loyalty_rewards: rewards.map((r) => ({ ...r, points: Number(r.points) || 0, value: Number(r.value) || 0 })),
+      });
+      await refresh(); toast.success("Programme de fidélité enregistré");
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/80 p-6 max-w-3xl space-y-6" data-testid="admin-loyalty-panel">
+      <div className="flex items-center justify-between">
+        <h3 className="font-display font-bold text-lg">Programme de fidélité</h3>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.loyalty_enabled !== false} onChange={(e) => setF({ ...f, loyalty_enabled: e.target.checked })} className="accent-mint-600 w-4 h-4" data-testid="loyalty-enabled" /> Activé</label>
+      </div>
+      <L label="Points gagnés par tranche de 100 DA">
+        <input type="number" min="0" value={f.loyalty_points_per_100da ?? 1} onChange={(e) => setF({ ...f, loyalty_points_per_100da: e.target.value })} className={inp} data-testid="loyalty-rate" />
+      </L>
+
+      <div>
+        <h4 className="font-semibold text-sm mb-2">Statuts (paliers)</h4>
+        <div className="space-y-2">
+          {tiers.map((t, i) => (
+            <div key={i} className="flex items-center gap-2" data-testid={`tier-row-${i}`}>
+              <input value={t.name} onChange={(e) => setTier(i, { name: e.target.value })} placeholder="Nom" className={`${inp} flex-1`} data-testid={`tier-name-${i}`} />
+              <input type="number" value={t.min} onChange={(e) => setTier(i, { min: e.target.value })} placeholder="Points min" className={`${inp} w-32`} data-testid={`tier-min-${i}`} />
+              <button onClick={() => delTier(i)} className="text-slate-400 hover:text-red-500 px-1"><Trash2 className="w-4 h-4" /></button>
+            </div>
+          ))}
+          <button onClick={addTier} className="flex items-center gap-1.5 text-mint-700 text-sm font-semibold"><Plus className="w-4 h-4" /> Ajouter un statut</button>
+        </div>
+      </div>
+
+      <div>
+        <h4 className="font-semibold text-sm mb-2">Récompenses</h4>
+        <div className="space-y-2">
+          {rewards.map((r, i) => (
+            <div key={r.id} className="flex flex-wrap items-center gap-2 bg-mint-50/40 rounded-xl p-2" data-testid={`reward-row-${i}`}>
+              <input type="checkbox" checked={r.enabled !== false} onChange={(e) => setRw(i, { enabled: e.target.checked })} className="accent-mint-600 w-4 h-4" title="Activer" />
+              <input value={r.label} onChange={(e) => setRw(i, { label: e.target.value })} placeholder="Libellé" className={`${inp} flex-1 min-w-[140px]`} data-testid={`reward-label-${i}`} />
+              <input type="number" value={r.points} onChange={(e) => setRw(i, { points: e.target.value })} placeholder="Coût (pts)" className={`${inp} w-28`} data-testid={`reward-points-${i}`} />
+              <select value={r.type} onChange={(e) => setRw(i, { type: e.target.value })} className={`${inp} w-32`} data-testid={`reward-type-${i}`}>
+                <option value="fixed">Bon (DA)</option>
+                <option value="percent">Réduction (%)</option>
+              </select>
+              <input type="number" value={r.value} onChange={(e) => setRw(i, { value: e.target.value })} placeholder="Valeur" className={`${inp} w-24`} data-testid={`reward-value-${i}`} />
+              <button onClick={() => delRw(i)} className="text-slate-400 hover:text-red-500 px-1"><Trash2 className="w-4 h-4" /></button>
+            </div>
+          ))}
+          <button onClick={addRw} className="flex items-center gap-1.5 text-mint-700 text-sm font-semibold" data-testid="reward-add"><Plus className="w-4 h-4" /> Ajouter une récompense</button>
+        </div>
+      </div>
+
+      <button onClick={save} disabled={busy} data-testid="loyalty-save" className="px-6 py-3 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold disabled:opacity-50">{busy ? "…" : "Enregistrer"}</button>
+    </div>
+  );
+}
+
+function FooterPanel() {
+  const { refresh } = useSettings();
+  const [f, setF] = useState(null);
+  const [pages, setPages] = useState([]);
+  const [editingPage, setEditingPage] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const loadPages = () => api.get("/admin/pages").then((r) => setPages(r.data)).catch(() => {});
+  useEffect(() => { api.get("/settings").then((r) => setF(r.data)); loadPages(); }, []);
+  if (!f) return <p className="text-slate-400">Chargement…</p>;
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.put("/settings", {
+        footer_about: f.footer_about, whatsapp_url: f.whatsapp_url,
+        footer_news_links: f.footer_news_links || [], footer_help_links: f.footer_help_links || [],
+      });
+      await refresh(); toast.success("Footer enregistré");
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    finally { setBusy(false); }
+  };
+
+  const delPage = async (id) => { if (!window.confirm("Supprimer cette page ?")) return; await api.delete(`/admin/pages/${id}`); loadPages(); };
+
+  return (
+    <div className="space-y-6" data-testid="admin-footer-panel">
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-6 max-w-3xl space-y-5">
+        <div>
+          <h3 className="font-display font-bold text-lg mb-1">Colonne « À propos »</h3>
+          <L label="Texte de présentation de la pharmacie"><textarea rows={4} value={f.footer_about || ""} onChange={(e) => setF({ ...f, footer_about: e.target.value })} className={inp} data-testid="footer-about-input" /></L>
+        </div>
+        <div>
+          <h3 className="font-display font-bold text-lg mb-1">Réseau « Nous suivre »</h3>
+          <p className="text-sm text-slate-500 mb-2">Facebook, Instagram et TikTok se règlent dans l'onglet Paramètres. WhatsApp utilise le numéro BaridiMob par défaut, ou saisissez un lien dédié :</p>
+          <L label="Lien WhatsApp (optionnel)"><input value={f.whatsapp_url || ""} onChange={(e) => setF({ ...f, whatsapp_url: e.target.value })} placeholder="https://wa.me/213..." className={inp} data-testid="footer-whatsapp-input" /></L>
+        </div>
+        <LinksEditor title="Colonne « Actualités »" links={f.footer_news_links || []} onChange={(arr) => setF({ ...f, footer_news_links: arr })} pageOptions={pages} testidPrefix="news" />
+        <LinksEditor title="Colonne « Aide »" links={f.footer_help_links || []} onChange={(arr) => setF({ ...f, footer_help_links: arr })} pageOptions={pages} testidPrefix="help" />
+        <button onClick={save} disabled={busy} data-testid="footer-save" className="px-6 py-3 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold disabled:opacity-50">{busy ? "…" : "Enregistrer le footer"}</button>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-6 max-w-3xl">
+        <div className="flex items-center justify-between mb-4">
+          <div><h3 className="font-display font-bold text-lg">Pages de contenu (CMS)</h3><p className="text-sm text-slate-500">Éditez le contenu de chaque page liée dans le footer (FAQ, Livraison, etc.).</p></div>
+          <button onClick={() => setEditingPage({})} data-testid="page-new" className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-mint-600 text-white text-sm font-semibold"><Plus className="w-4 h-4" /> Nouvelle page</button>
+        </div>
+        <div className="space-y-2" data-testid="pages-list">
+          {pages.map((p) => (
+            <div key={p.id} className="flex items-center gap-3 bg-mint-50/40 rounded-xl p-3" data-testid={`page-row-${p.slug}`}>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-sm truncate">{p.title} {p.enabled === false && <span className="text-xs text-red-500 font-normal">(désactivée)</span>}</div>
+                <div className="text-xs text-slate-400">/page/{p.slug}</div>
+              </div>
+              <a href={`/page/${p.slug}`} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-mint-600" title="Voir"><ExternalLink className="w-4 h-4" /></a>
+              <button onClick={() => setEditingPage(p)} className="text-slate-400 hover:text-mint-600" data-testid={`page-edit-${p.slug}`}><Pencil className="w-4 h-4" /></button>
+              <button onClick={() => delPage(p.id)} className="text-slate-400 hover:text-red-500" data-testid={`page-del-${p.slug}`}><Trash2 className="w-4 h-4" /></button>
+            </div>
+          ))}
+          {pages.length === 0 && <p className="text-slate-400 text-sm">Aucune page.</p>}
+        </div>
+      </div>
+
+      {editingPage !== null && <PageEditModal page={editingPage.id ? editingPage : null} onClose={() => setEditingPage(null)} onSaved={() => { setEditingPage(null); loadPages(); }} />}
+    </div>
+  );
+}
+
 function SettingsPanel() {
   const { refresh } = useSettings();
   const [f, setF] = useState(null);
@@ -936,6 +1207,31 @@ function SettingsPanel() {
             ))}
           </div>
         </details>
+      </div>
+      <div>
+        <h3 className="font-display font-bold text-lg mb-1">Thème saisonnier</h3>
+        <p className="text-sm text-slate-500 mb-3">Change la palette de couleurs du site selon la saison.</p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <L label="Mode">
+            <select value={f.theme_mode || "auto"} onChange={(e) => set("theme_mode", e.target.value)} className={inp} data-testid="theme-mode">
+              <option value="auto">Automatique (selon la saison en cours)</option>
+              <option value="manual">Manuel (choix fixe)</option>
+            </select>
+          </L>
+          <L label="Thème (mode manuel)">
+            <select value={f.theme_manual || "spring"} onChange={(e) => set("theme_manual", e.target.value)} disabled={(f.theme_mode || "auto") !== "manual"} className={`${inp} disabled:opacity-50`} data-testid="theme-manual">
+              <option value="spring">Printemps (vert)</option>
+              <option value="summer">Été (turquoise)</option>
+              <option value="autumn">Automne (orange)</option>
+              <option value="winter">Hiver (bleu)</option>
+            </select>
+          </L>
+        </div>
+        <div className="flex gap-2 mt-3">
+          {[["spring","#16A34A"],["summer","#0891B2"],["autumn","#EA580C"],["winter","#2563EB"]].map(([name,c]) => (
+            <span key={name} className="flex items-center gap-1.5 text-xs text-slate-500"><span className="w-4 h-4 rounded-full" style={{background:c}} />{name}</span>
+          ))}
+        </div>
       </div>
       <div>
         <h3 className="font-display font-bold text-lg mb-3">Pages légales (footer)</h3>

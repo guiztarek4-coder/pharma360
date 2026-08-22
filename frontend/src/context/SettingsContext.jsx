@@ -46,6 +46,22 @@ export const SettingsProvider = ({ children }) => {
 
   useEffect(() => { refresh(); }, []);
 
+  // Apply seasonal theme class to <html>
+  useEffect(() => {
+    const seasonFromDate = () => {
+      const m = new Date().getMonth() + 1; // 1-12
+      if (m >= 3 && m <= 5) return "spring";
+      if (m >= 6 && m <= 8) return "summer";
+      if (m >= 9 && m <= 11) return "autumn";
+      return "winter";
+    };
+    const mode = settings.theme_mode || "auto";
+    const active = mode === "manual" ? (settings.theme_manual || "spring") : seasonFromDate();
+    const root = document.documentElement;
+    ["theme-spring", "theme-summer", "theme-autumn", "theme-winter"].forEach((c) => root.classList.remove(c));
+    root.classList.add(`theme-${active}`);
+  }, [settings.theme_mode, settings.theme_manual]);
+
   return (
     <SettingsContext.Provider value={{ settings, refresh }}>
       {children}

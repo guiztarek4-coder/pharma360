@@ -1,17 +1,22 @@
 import { useEffect, useState } from "react";
 import { useParams, useLocation, Link } from "react-router-dom";
-import { CheckCircle2, Package, Phone } from "lucide-react";
+import { CheckCircle2, Package, Phone, Gift } from "lucide-react";
 import api, { formatDA } from "@/lib/api";
 import { useSettings } from "@/context/SettingsContext";
+import { useAuth } from "@/context/AuthContext";
 import StatusTracker from "@/components/StatusTracker";
 
 export default function OrderSuccess() {
   const { id } = useParams();
   const location = useLocation();
   const { settings } = useSettings();
+  const { user } = useAuth();
   const [order, setOrder] = useState(location.state?.order || null);
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
+
+  const rate = settings.loyalty_points_per_100da || 1;
+  const earnedPoints = user && settings.loyalty_enabled && order ? Math.floor((order.subtotal || 0) / 100) * rate : 0;
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-16 text-center animate-fade-up">
@@ -42,6 +47,16 @@ export default function OrderSuccess() {
             {order.discount > 0 && <div className="flex justify-between text-mint-700"><span>Remise {order.promo_code ? `(${order.promo_code})` : ""}</span><span>- {formatDA(order.discount)}</span></div>}
             <div className="flex justify-between font-display font-extrabold text-lg"><span>Total</span><span className="text-mint-700">{formatDA(order.total)}</span></div>
             <div className="text-xs text-slate-400 mt-2">Paiement : {order.payment_method === "card" ? "Carte (démo)" : "À la livraison"}</div>
+          </div>
+        </div>
+      )}
+
+      {earnedPoints > 0 && (
+        <div className="bg-mint-50 border border-mint-200 rounded-2xl p-5 mt-6 flex items-center gap-3 text-left" data-testid="loyalty-earned-banner">
+          <span className="w-11 h-11 rounded-full bg-mint-600 grid place-items-center shrink-0"><Gift className="w-5 h-5 text-white" /></span>
+          <div>
+            <div className="font-display font-bold text-mint-800">Bravo ! Vous avez gagné {earnedPoints} points</div>
+            <div className="text-sm text-slate-600">Ils seront ajoutés à votre compte fidélité dès la livraison de votre commande.</div>
           </div>
         </div>
       )}

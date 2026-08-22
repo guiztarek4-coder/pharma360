@@ -86,11 +86,23 @@ Site e-commerce de parapharmacie "Pharma360" basé en Algérie, inspiré de phar
 - **Visite virtuelle 360°** : page `/visite-360` (lien `virtual_tour_url` éditable dans l'admin, placeholder si vide) + bouton « Explorez à 360° notre boutique » sur la page Contact.
 - Tests : backend 5/5 ; frontend ~95% (petit quirk de synchro du select wilaya corrigé).
 
+## Implemented (2026-06-22 — iteration 11-14)
+- **Correctif Mot de passe client (Resend free tier)** : `onboarding@resend.dev` ne peut envoyer qu'à l'adresse propriétaire du compte Resend. Solution de secours : `POST /api/auth/forgot-password` renvoie désormais `reset_link` + `found` quand le compte existe ; le lien s'affiche directement à l'écran (sur `/compte` et au checkout) via un bouton « Créer un nouveau mot de passe ». (Pour de vrais emails clients : vérifier un domaine dans Resend.)
+- **Système de favoris** : cœur sur `ProductCard` + fiche produit. `GET/POST/DELETE /api/favorites` (auth, tableau `favorites` sur user). Onglet « Mes favoris » dans `/compte`. `FavoritesContext`. Non connecté → toast d'invite à se connecter.
+- **Refonte Footer (5 colonnes)** : À propos (texte éditable), Actualités (liens éditables), Aide (liens éditables), Nous suivre (Facebook/Instagram/TikTok/WhatsApp), Contactez-nous (adresse Maps, tel, email, horaires, visite 360). Liens des colonnes Actualités/Aide gérables (ajout/édition/activation) dans l'admin onglet **Footer & Pages**. Réseaux : FB/IG/TikTok dans Paramètres, WhatsApp = `whatsapp_url` ou dérivé du numéro.
+- **Pages CMS** : collection `cms_pages`, route publique `/page/:slug`, endpoints `GET /api/pages/{slug}`, `GET/POST/PUT/DELETE /api/admin/pages`. 9 pages seedées (FAQ, modes-paiement, retour-produit, conditions-livraison, conditions-promos, rappel-produit, idées-cadeaux, carte-cadeau, programme-fidélité). Contenu éditable depuis l'admin (activer/désactiver, slug auto).
+- **Programme de fidélité** : 1 pt / 100 DA (config `loyalty_points_per_100da`). Points crédités quand la commande passe au statut **« Livrée »** (`update_order_status`) ; message « Bravo, vous avez gagné X points » sur OrderSuccess (crédités à la livraison). Statuts Bronze/Argent/Or (`loyalty_tiers`). Récompenses (`loyalty_rewards`, type fixed/percent) échangeables → crée un code promo `FID-XXXX` single-use (réutilise le système de promo, désactivé après usage). Page `/fidelite` + onglet `/compte`. Admin onglet **Fidélité** (activer, taux, paliers, récompenses). Endpoints `GET /api/loyalty/config|me`, `POST /api/loyalty/redeem`.
+- **Thèmes saisonniers** : palette `mint` convertie en variables CSS ; classes `.theme-{spring|summer|autumn|winter}` (Printemps=vert, Été=turquoise, Automne=orange, Hiver=bleu). `theme_mode` (auto = selon le mois / manual) + `theme_manual` réglés dans Paramètres. Appliqué sur `<html>` via `SettingsContext`.
+- **Chat client en direct (interne)** : widget flottant `ChatWidget` (bas-droite), démarrage conversation (nom/email ou auto si connecté), messages stockés (`chat_conversations` + `chat_messages`), polling 4s. Admin onglet **Chat** (liste conversations + réponse, badge non-lus). Notification in-app admin à chaque message client. Endpoints `/api/chat/start|{id}/messages|{id}/message` + `/api/admin/chat/*`.
+- Tests : iterations 11-14 → backend 100%, frontend 100% des flux.
+
 ## Known Limitations / MOCKED
 - Paiement en ligne par carte (CIB/Edahabia) = **SIMULÉ (démo)**. Stripe ne supporte pas l'Algérie (DZ), donc pas de passerelle réelle. La commande carte est marquée "payée" sans transaction réelle.
-- Email de notification de commande = **inactif tant que RESEND_API_KEY n'est pas configuré** (la notification in-app fonctionne).
+- Email de notification de commande / reset password = **limité au tier gratuit Resend** (`onboarding@resend.dev` n'envoie qu'à l'adresse du propriétaire du compte). Le reset password propose le lien à l'écran en secours. Notification de nouveau message chat = in-app uniquement (pas d'email).
 
 ## Backlog
-- P1: Validation de stock avant commande (rejeter si insuffisant); frais de livraison par wilaya.
-- P2: Restreindre CORS à l'origine du preview; avis produits/notes; codes promo.
+- P1: SMS (Twilio) pour le lien de réinitialisation / notifications (nécessite clé API payante).
+- P1: Validation de stock avant commande (rejeter si insuffisant).
+- P2: Restreindre CORS à l'origine du preview; avis produits/notes.
 - P2: Intégration passerelle de paiement algérienne réelle (SATIM/CIB) quand disponible.
+- P2: Vérification de domaine Resend pour de vrais emails clients.

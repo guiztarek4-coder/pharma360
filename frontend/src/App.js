@@ -3,12 +3,14 @@ import { Toaster } from "sonner";
 import "@/index.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
+import { FavoritesProvider } from "@/context/FavoritesContext";
 import { SettingsProvider } from "@/context/SettingsContext";
 import { CategoriesProvider } from "@/context/CategoriesContext";
 import TopBar from "@/components/layout/TopBar";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import CartDrawer from "@/components/layout/CartDrawer";
+import ChatWidget from "@/components/ChatWidget";
 
 import Home from "@/pages/Home";
 import Catalog from "@/pages/Catalog";
@@ -23,6 +25,8 @@ import Contact from "@/pages/Contact";
 import { Privacy, Terms } from "@/pages/Legal";
 import ResetPassword from "@/pages/ResetPassword";
 import VirtualTour from "@/pages/VirtualTour";
+import CmsPage from "@/pages/CmsPage";
+import Loyalty from "@/pages/Loyalty";
 import Admin from "@/pages/Admin";
 
 function Shell({ children }) {
@@ -36,6 +40,7 @@ function Shell({ children }) {
       <main className="flex-1">{children}</main>
       <Footer />
       <CartDrawer />
+      <ChatWidget />
     </div>
   );
 }
@@ -46,6 +51,7 @@ function App() {
       <BrowserRouter>
         <AuthProvider>
           <CartProvider>
+            <FavoritesProvider>
             <SettingsProvider>
             <CategoriesProvider>
               <Shell>
@@ -66,12 +72,15 @@ function App() {
                 <Route path="/cgv" element={<Terms />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/visite-360" element={<VirtualTour />} />
+                <Route path="/page/:slug" element={<CmsPage />} />
+                <Route path="/fidelite" element={<Loyalty />} />
                 <Route path="/admin" element={<Admin />} />
               </Routes>
             </Shell>
             <Toaster position="top-center" richColors />
             </CategoriesProvider>
             </SettingsProvider>
+            </FavoritesProvider>
           </CartProvider>
         </AuthProvider>
       </BrowserRouter>
