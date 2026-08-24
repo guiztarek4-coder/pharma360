@@ -1674,6 +1674,52 @@ async def loyalty_me(user: dict = Depends(get_current_user)):
     }
 
 
+@api.get("/loyalty/member-pricing")
+async def loyalty_member_pricing(user: dict = Depends(get_current_user)):
+    """Return the product discounts available to the logged-in member's current tier."""
+    s = await db.settings.find_one({"_id": "site"}) or {}
+    if not s.get("loyalty_enabled", True):
+        return {"tier": None, "discounts": {}}
+    cur, _ = _loyalty_tier(int(user.get("loyalty_points", 0)), s.get("loyalty_tiers", []))
+    tier_name = user.get("loyalty_tier_override") or (cur.get("name") if cur else None)
+    if not tier_name:
+        return {"tier": None, "discounts": {}}
+    discounts = {}
+    for o in s.get("loyalty_offers", []):
+        if not o.get("enabled", True) or tier_name not in (o.get("tiers") or []):
+            continue
+        for pid in (o.get("product_ids") or []):
+            discounts[pid] = {"type": o.get("discount_type", "percent"), "value": o.get("discount_value", 0)}
+    return {"tier": tier_name, "discounts": discounts}
+
+
+@api.get("/admin/gift-claims")
+async def admin_gift_claims(admin: dict = Depends(get_admin_user)):
+    users = await db.users.find({"gift_claims": {"$exists": True, "$ne": []}}).to_list(5000)
+    all_codes = [c.get("code") for u in users for c in (u.get("gift_claims") or [])]
+    promos = {}
+    if all_codes:
+        async for p in db.promo_codes.find({"code": {"$in": all_codes}}):
+            promos[p["code"]] = p
+    rows = []
+    for u in users:
+        for c in (u.get("gift_claims") or []):
+            p = promos.get(c.get("code"), {})
+            rows.append({
+                "customer_name": (u.get("first_name", "") + " " + u.get("last_name", "")).strip() or u.get("email") or u.get("phone"),
+                "customer_email": u.get("email"),
+                "customer_phone": u.get("phone"),
+                "tier": c.get("tier"),
+                "gift_name": c.get("gift_name"),
+                "code": c.get("code"),
+                "used": bool(p) and not p.get("active", True),
+                "used_at": p.get("used_at"),
+                "claimed_at": c.get("created_at"),
+            })
+    rows.sort(key=lambda r: r.get("claimed_at") or "", reverse=True)
+    return rows
+
+
 @api.post("/loyalty/claim-gift")
 async def loyalty_claim_gift(payload: dict, user: dict = Depends(get_current_user)):
     s = await db.settings.find_one({"_id": "site"}) or {}

@@ -125,6 +125,12 @@ Site e-commerce de parapharmacie "Pharma360" basé en Algérie, inspiré de phar
 - **Nouveaux thèmes** : rose (Rose poudré), mauve (Mauve pâle), gold (Doré), noir (Noir) ajoutés au sélecteur Apparence en plus des 4 saisons. Classes CSS `theme-rose/mauve/gold/noir`.
 - Tests : backend 10/10, frontend 100% sur les 6 flux (iteration_20).
 
+## Implemented (2026-06 — iteration 23 : Prix membre + Suivi cadeaux)
+- **Prix membre au catalogue & fiche produit** : `GET /api/loyalty/member-pricing` (auth) renvoie les réductions du statut du client connecté. Nouveau `MemberPricingContext` → badge doré « PRIX {statut} », prix réduit + prix barré sur `ProductCard` et `ProductDetail`, ajout au panier au prix membre (serveur re-vérifie au checkout). Visiteur non connecté / produit non couvert = prix normal.
+- **Suivi des cadeaux réclamés (admin)** : `GET /api/admin/gift-claims` + tableau « Cadeaux réclamés » dans Admin > Fidélité (Client / Statut / Cadeau / Code / État Actif|Utilisé / Date).
+- **Sélection multi-catégories cumulative** : « Tout sélectionner » cumule bien entre catégories (union) ; libellé « — cumulé entre catégories ».
+- Tests : frontend 100% (4/4 — iteration_23). Backend vérifié via curl.
+
 ## Implemented (2026-06 — iteration 22 : Sélection de produits en masse)
 - **BulkProductSelector** (`/app/frontend/src/components/admin/BulkProductSelector.jsx`) : arbre catégories/sous-catégories (aplati, sans récursion pour éviter un stack-overflow babel/webpack), liste des produits d'une catégorie avec cases à cocher, « Tout sélectionner » (liste courante), décochage individuel, recherche. Chips des produits sélectionnés.
 - Appliqué dans **5 zones admin** : Idées cadeaux (`gift-featured`), Coffrets cadeaux (`pack-products`), Cadeaux par statut Bronze/Silver/Gold (`tier-{i}-giftpick`), Offres exclusives (`offer-products-{i}`), et produits complémentaires de la fiche produit (`pf-comp`). Remplace l'ancien `ComplementarySelector` (recherche un-par-un).

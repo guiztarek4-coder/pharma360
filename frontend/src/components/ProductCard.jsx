@@ -1,13 +1,16 @@
 import { Link } from "react-router-dom";
-import { ShoppingCart, Heart } from "lucide-react";
+import { ShoppingCart, Heart, Crown } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useFavorites } from "@/context/FavoritesContext";
+import { useMemberPricing } from "@/context/MemberPricingContext";
 import { formatDA, mediaUrl } from "@/lib/api";
 
 export default function ProductCard({ product }) {
   const { addItem } = useCart();
   const { isFavorite, toggleFavorite } = useFavorites();
+  const { getMemberPrice } = useMemberPricing();
   const fav = isFavorite(product.id);
+  const mp = getMemberPrice(product);
   const promo = product.old_price && product.old_price > product.price;
   const discount = promo ? Math.round((1 - product.price / product.old_price) * 100) : 0;
   const badge = product.badge || (product.is_new ? "NOUVEAU" : null);
@@ -19,8 +22,9 @@ export default function ProductCard({ product }) {
         <img src={mediaUrl(product.images?.[0])} alt={product.name} loading="lazy"
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1.5">
-          {promo && <span className="px-2 py-0.5 rounded-full bg-red-500 text-white text-[11px] font-bold shadow">-{discount}%</span>}
-          {badge && !promo && <span className={`px-2 py-0.5 rounded-full ${badgeColor} text-white text-[10px] font-bold shadow font-mono-label`}>{badge}</span>}
+          {mp && <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-600 text-white text-[10px] font-bold shadow flex items-center gap-1" data-testid={`product-member-badge-${product.id}`}><Crown className="w-3 h-3" /> PRIX {mp.tier?.toUpperCase()}</span>}
+          {promo && !mp && <span className="px-2 py-0.5 rounded-full bg-red-500 text-white text-[11px] font-bold shadow">-{discount}%</span>}
+          {badge && !promo && !mp && <span className={`px-2 py-0.5 rounded-full ${badgeColor} text-white text-[10px] font-bold shadow font-mono-label`}>{badge}</span>}
         </div>
         {product.stock <= 0 && <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full bg-slate-700 text-white text-[10px] font-semibold">Rupture</span>}
       </Link>
@@ -36,11 +40,20 @@ export default function ProductCard({ product }) {
         <Link to={`/produit/${product.id}`} className="text-sm font-semibold text-slate-dark line-clamp-2 leading-snug hover:text-mint-700 transition-colors min-h-[2.5rem]">{product.name}</Link>
         <div className="mt-auto pt-3 flex items-end justify-between gap-2">
           <div>
-            {promo && <div className="text-xs text-slate-400 line-through">{formatDA(product.old_price)}</div>}
-            <div className="font-display font-extrabold text-mint-700 text-base sm:text-lg">{formatDA(product.price)}</div>
+            {mp ? (
+              <>
+                <div className="text-xs text-slate-400 line-through">{formatDA(mp.original)}</div>
+                <div className="font-display font-extrabold text-amber-600 text-base sm:text-lg" data-testid={`product-member-price-${product.id}`}>{formatDA(mp.price)}</div>
+              </>
+            ) : (
+              <>
+                {promo && <div className="text-xs text-slate-400 line-through">{formatDA(product.old_price)}</div>}
+                <div className="font-display font-extrabold text-mint-700 text-base sm:text-lg">{formatDA(product.price)}</div>
+              </>
+            )}
           </div>
           <button
-            onClick={() => addItem(product)}
+            onClick={() => addItem(mp ? { ...product, price: mp.price } : product)}
             disabled={product.stock <= 0}
             data-testid={`product-card-add-to-cart-${product.id}`}
             className="w-10 h-10 rounded-full bg-mint-600 hover:bg-mint-700 active:scale-95 text-white grid place-items-center shadow-md shadow-mint-600/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0">

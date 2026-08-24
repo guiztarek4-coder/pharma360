@@ -7,6 +7,7 @@ import { CartProvider } from "@/context/CartContext";
 import { FavoritesProvider } from "@/context/FavoritesContext";
 import { SettingsProvider } from "@/context/SettingsContext";
 import { CategoriesProvider } from "@/context/CategoriesContext";
+import { MemberPricingProvider } from "@/context/MemberPricingContext";
 import TopBar from "@/components/layout/TopBar";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -58,6 +59,7 @@ function App() {
             <FavoritesProvider>
             <SettingsProvider>
             <CategoriesProvider>
+            <MemberPricingProvider>
               <Shell>
               <Routes>
                 <Route path="/" element={<Home />} />
@@ -84,6 +86,7 @@ function App() {
               </Routes>
             </Shell>
             <Toaster position="top-center" richColors />
+            </MemberPricingProvider>
             </CategoriesProvider>
             </SettingsProvider>
             </FavoritesProvider>

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ShoppingCart, Plus, Minus, ShieldCheck, Truck, CreditCard, ChevronRight, Check, Star, Heart } from "lucide-react";
+import { ShoppingCart, Plus, Minus, ShieldCheck, Truck, CreditCard, ChevronRight, Check, Star, Heart, Crown } from "lucide-react";
 import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
 import { useCart } from "@/context/CartContext";
 import { useFavorites } from "@/context/FavoritesContext";
+import { useMemberPricing } from "@/context/MemberPricingContext";
 import { useCategories } from "@/context/CategoriesContext";
 import { toast } from "sonner";
 
@@ -81,6 +82,7 @@ function Reviews({ productId }) {
 export default function ProductDetail() {
   const { id } = useParams();
   const { addItem } = useCart();
+  const { getMemberPrice } = useMemberPricing();
   const { isFavorite, toggleFavorite } = useFavorites();
   const { getAncestors, flat } = useCategories();
   const [product, setProduct] = useState(null);
@@ -109,6 +111,7 @@ export default function ProductDetail() {
 
   const promo = product.old_price && product.old_price > product.price;
   const discount = promo ? Math.round((1 - product.price / product.old_price) * 100) : 0;
+  const mp = getMemberPrice(product);
   const images = product.images?.length ? product.images : [null];
   const catPath = product.category_id ? getAncestors(product.category_id) : [];
 
@@ -147,9 +150,19 @@ export default function ProductDetail() {
           {product.brand && <Link to={`/catalogue?brand=${encodeURIComponent(product.brand)}`} className="text-sm font-mono-label text-mint-600">{product.brand}</Link>}
           <h1 className="font-display font-extrabold text-2xl sm:text-3xl md:text-4xl text-slate-dark mt-1 leading-tight" data-testid="product-title">{product.name}</h1>
 
-          <div className="flex items-center gap-3 mt-5">
-            <span className="font-display font-extrabold text-3xl text-mint-700" data-testid="product-price">{formatDA(product.price)}</span>
-            {promo && <span className="text-lg text-slate-400 line-through">{formatDA(product.old_price)}</span>}
+          <div className="flex items-center gap-3 mt-5 flex-wrap">
+            {mp ? (
+              <>
+                <span className="font-display font-extrabold text-3xl text-amber-600" data-testid="product-member-price">{formatDA(mp.price)}</span>
+                <span className="text-lg text-slate-400 line-through">{formatDA(mp.original)}</span>
+                <span className="px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500 to-yellow-600 text-white text-xs font-bold flex items-center gap-1" data-testid="product-member-badge"><Crown className="w-3.5 h-3.5" /> Prix membre {mp.tier}</span>
+              </>
+            ) : (
+              <>
+                <span className="font-display font-extrabold text-3xl text-mint-700" data-testid="product-price">{formatDA(product.price)}</span>
+                {promo && <span className="text-lg text-slate-400 line-through">{formatDA(product.old_price)}</span>}
+              </>
+            )}
           </div>
 
           <div className="mt-3">
@@ -168,7 +181,7 @@ export default function ProductDetail() {
               <span className="w-8 text-center font-semibold" data-testid="product-qty">{qty}</span>
               <button onClick={() => setQty(qty + 1)} data-testid="product-qty-inc" className="w-8 h-8 grid place-items-center rounded-full hover:bg-mint-50"><Plus className="w-4 h-4" /></button>
             </div>
-            <button onClick={() => addItem(product, qty)} disabled={product.stock <= 0} data-testid="product-add-to-cart"
+            <button onClick={() => addItem(mp ? { ...product, price: mp.price } : product, qty)} disabled={product.stock <= 0} data-testid="product-add-to-cart"
               className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold shadow-lg shadow-mint-600/30 transition-colors disabled:opacity-40">
               <ShoppingCart className="w-5 h-5" /> Ajouter au panier
             </button>

@@ -1325,7 +1325,8 @@ function LoyaltyAdminPanel() {
   const { refresh } = useSettings();
   const [f, setF] = useState(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { api.get("/settings").then((r) => setF(r.data)); }, []);
+  const [claims, setClaims] = useState([]);
+  useEffect(() => { api.get("/settings").then((r) => setF(r.data)); api.get("/admin/gift-claims").then((r) => setClaims(r.data)).catch(() => {}); }, []);
   if (!f) return <p className="text-slate-400">Chargement…</p>;
 
   const tiers = f.loyalty_tiers || [];
@@ -1490,6 +1491,32 @@ function LoyaltyAdminPanel() {
           ))}
           <button onClick={addOffer} className="flex items-center gap-1.5 text-mint-700 text-sm font-semibold" data-testid="offer-add"><Plus className="w-4 h-4" /> Ajouter une offre exclusive</button>
         </div>
+      </div>
+
+      <div>
+        <h4 className="font-semibold text-sm mb-2 flex items-center gap-1.5"><Gift className="w-4 h-4 text-mint-600" /> Cadeaux réclamés ({claims.length})</h4>
+        <p className="text-xs text-slate-500 mb-3">Suivi des cadeaux choisis par vos clients. « Utilisé » = le code a été appliqué sur une commande.</p>
+        {claims.length === 0 ? <p className="text-sm text-slate-400">Aucun cadeau réclamé pour le moment.</p> : (
+          <div className="overflow-x-auto border border-mint-100 rounded-xl" data-testid="gift-claims-table">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead className="bg-mint-50 text-slate-500 text-xs uppercase">
+                <tr><th className="text-left p-3">Client</th><th className="text-left p-3">Statut</th><th className="text-left p-3">Cadeau</th><th className="text-left p-3">Code</th><th className="text-left p-3">État</th><th className="text-left p-3">Date</th></tr>
+              </thead>
+              <tbody>
+                {claims.map((c, i) => (
+                  <tr key={i} className="border-t border-mint-50" data-testid={`gift-claim-row-${i}`}>
+                    <td className="p-3"><div className="font-medium">{c.customer_name}</div><div className="text-xs text-slate-400">{c.customer_email || c.customer_phone || ""}</div></td>
+                    <td className="p-3"><span className="px-2 py-0.5 rounded-full bg-mint-100 text-mint-800 text-xs font-semibold">{c.tier}</span></td>
+                    <td className="p-3">{c.gift_name}</td>
+                    <td className="p-3 font-mono text-xs">{c.code}</td>
+                    <td className="p-3">{c.used ? <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 text-xs font-semibold">Utilisé</span> : <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold">Actif</span>}</td>
+                    <td className="p-3 text-xs text-slate-500">{c.claimed_at ? new Date(c.claimed_at).toLocaleDateString("fr-FR") : ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <button onClick={save} disabled={busy} data-testid="loyalty-save" className="px-6 py-3 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold disabled:opacity-50">{busy ? "…" : "Enregistrer"}</button>

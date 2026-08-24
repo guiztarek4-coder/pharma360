@@ -94,7 +94,7 @@ export default function BulkProductSelector({ value, onChange, testid = "bulk" }
           {shownIds.length > 0 && (
             <label className="flex items-center gap-2 px-3 py-2 border-b border-mint-50 bg-mint-50/30 text-sm font-semibold cursor-pointer" data-testid={`${testid}-select-all`}>
               <input type="checkbox" checked={allShownSelected} onChange={toggleAll} className="accent-mint-600 w-4 h-4" />
-              Tout sélectionner ({shownIds.length})
+              Tout sélectionner ({shownIds.length}) <span className="text-[11px] font-normal text-slate-400">— cumulé entre catégories</span>
             </label>
           )}
           <div className="flex-1 overflow-auto">
