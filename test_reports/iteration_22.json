@@ -1,0 +1,27 @@
+{
+  "summary": "Frontend-only verification of the new BulkProductSelector component and its 4 usages across Admin (offers, tier gifts, gift packs, gift featured, product complementary). Admin compiles cleanly (no webpack/babel stack overflow — the flattened tree fix holds). Logged in as admin, ran the full spec end-to-end. RESULTS: (1) Offres exclusives (offer-products-0): category click loads 8 products ✓; expanding parent (bulk-cat-expand-*) reveals sub-cats (13→15 rows) ✓; 'Tout sélectionner' (offer-products-0-select-all) selects all 8 shown, 8 chips appear ✓; unchecking a single product removes its chip ✓; typing 'cre' in offer-products-0-search returns 6 matching products across categories ✓. (2) Persistence of offers: saved offer with 7 products via loyalty-save + reloaded → chips=7/7, title='TEST_BULK_OFFER', value='15' persist ✓. (3) Tier 0 gift picker (tier-0-giftpick): category click → 8 products, Tout sélectionner → 8 gift chips; also added a custom hors-catalogue gift (tier-0-gift-add-custom + tier-0-gift-name-*='TEST_CustomGift'); saved+reloaded → gift chips 8/8 persisted and custom 'TEST_CustomGift' persisted alongside ✓ (product gifts saved as type='product' with product_id, custom as type='custom'+name). (4) ProductForm complementary (pf-comp): opened an existing product, pf-comp-selector rendered, 13 cat rows, category click loaded 8 candidate products with checkboxes ✓. (5) Cadeaux tab: gift-featured-selector renders on load ✓; opening a new gift pack (pack-new) shows pack-products-selector inside the modal ✓. All 4 zones plus core selector work. Cleanup: reset via PUT /api/settings — loyalty_offers=[] and loyalty_tiers[0..2].gifts=[] (verified). No product complementary_ids were persisted (Escape closed the ProductForm without save). Theme not touched.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_22.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Admin.jsx is 1728 lines — still worth splitting LoyaltyAdminPanel/GiftsPanel/SettingsPanel/ProductForm into separate files for maintainability.",
+    "BulkProductSelector fetches every selected product individually via GET /products/:id in a Promise.all inside a useEffect keyed on JSON.stringify(ids) — for large selections (e.g. 50+ products) this hammers the backend with N parallel calls on every change. Consider a batch endpoint GET /products?ids=a,b,c or caching resolved products.",
+    "BulkProductSelector accepts an undefined initial `value` and coerces to [] via `const ids = value || []`, but `useEffect([JSON.stringify(ids)])` will still run on every render and re-issue GETs when parents pass a new array reference. Using a memoized JSON string dep is fine, however note that if the parent passes a new [] each render (e.g. gift-featured before hydration), it triggers duplicate work.",
+    "The `bulk-cat-{id}` and `bulk-cat-expand-{id}` testids are shared across all instances of BulkProductSelector on the same page (Loyalty tab has 4 instances). Any test not scoped to `{testid}-selector` will click the wrong one. Consider prefixing these testids with the instance testid too (e.g. `{testid}-cat-{id}`).",
+    "In LoyaltyAdminPanel.save, product gifts with a valid product_id are always kept even without a name (correct), but custom gifts with empty name are silently dropped. A toast warning would help the admin. (Carry-over from iter-21.)",
+    "The BulkProductSelector search input triggers /products?limit=500&search=... — a 500-item response returned every keystroke (after 300ms debounce). For large catalogs consider server-side smaller limit + pagination inside the picker."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100% (6/6 requested flows: offer-bulk core a-e, offer persist, tier gift+custom persist, coffret pack-products render, gift-featured render, pf-comp render+browse)"},
+  "test_credentials": "Admin: pharmacie360benak@gmail.com / Aminetarek1992*.",
+  "seed_data_creation": "During test: 1 TEST_BULK_OFFER (BRONZE, 15% off, 7 products) + 8 BRONZE product gifts + 1 TEST_CustomGift hors-catalogue on tier 0. All REMOVED at end via PUT /api/settings — verified loyalty_offers=0 and gifts=[0,0,0] for all 3 tiers. No product complementary_ids modified (change was not saved).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "BulkProductSelector fully functional across all 4 admin zones. Note: `bulk-cat-{id}` and `bulk-cat-expand-{id}` testids are shared across multiple instances on the same tab (Loyalty tab has 4). ALWAYS scope selector queries by the parent `[data-testid=\"{testid}-selector\"]` when clicking category rows, otherwise you may click the wrong instance's row. `Tout sélectionner` intentionally only selects the currently displayed list (per category or search results), which matches the spec.",
+  "rca of the issue": "N/A — no bugs."
+}

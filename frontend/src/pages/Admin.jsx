@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef } from "react";
-import { LayoutDashboard, Package, ShoppingBag, Tag, FileText, LogOut, Plus, Pencil, Trash2, X, Upload, TrendingUp, Users, Leaf, Settings, FolderTree, Ticket, Bell, Image as ImageIcon, UserCog, ChevronRight, GripVertical, Download, FileSpreadsheet, AlertCircle, AlertTriangle, Truck, MapPin, Compass, PanelBottom, ExternalLink, Gift, MessageCircle, Send, Sparkles, Eye, EyeOff, BarChart3, Crown } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Tag, FileText, LogOut, Plus, Pencil, Trash2, X, Upload, TrendingUp, Users, Leaf, Settings, FolderTree, Ticket, Bell, Image as ImageIcon, UserCog, ChevronRight, GripVertical, Download, FileSpreadsheet, AlertCircle, AlertTriangle, Truck, MapPin, Compass, PanelBottom, ExternalLink, Gift, MessageCircle, Send, Sparkles, Eye, EyeOff, BarChart3, Crown, Search } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useSettings } from "@/context/SettingsContext";
 import { useCategories } from "@/context/CategoriesContext";
 import { WILAYAS } from "@/lib/site";
+import BulkProductSelector from "@/components/admin/BulkProductSelector";
 
 const inp = "w-full px-3 py-2 rounded-xl border border-mint-200 text-sm outline-none focus:ring-2 focus:ring-mint-500";
 const L = ({ label, children }) => (<div><label className="block text-xs font-medium text-slate-500 mb-1">{label}</label>{children}</div>);
@@ -117,6 +118,7 @@ function ComplementarySelector({ value, onChange }) {
   );
 }
 
+
 function CategoryPathSelector({ value, onChange }) {
   const { categories, findById, getAncestors } = useCategories();
   const path = value ? getAncestors(value) : [];
@@ -180,7 +182,7 @@ function ProductForm({ product, brands, categories, onClose, onSaved }) {
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.is_featured} onChange={(e) => set("is_featured", e.target.checked)} className="accent-mint-600 w-4 h-4" /> Coup de cœur</label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.is_new} onChange={(e) => set("is_new", e.target.checked)} className="accent-mint-600 w-4 h-4" /> Nouveauté</label>
       </div>
-      <L label="Produits complémentaires recommandés"><ComplementarySelector value={f.complementary_ids} onChange={(v) => set("complementary_ids", v)} /></L>
+      <L label="Produits complémentaires recommandés"><BulkProductSelector value={f.complementary_ids} onChange={(v) => set("complementary_ids", v)} testid="pf-comp" /></L>
       <button onClick={save} data-testid="pf-save" className="w-full py-3 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold">Enregistrer</button>
     </Modal>
   );
@@ -1183,7 +1185,7 @@ function GiftPackModal({ pack, onClose, onSaved }) {
       <L label="Nom du coffret"><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} className={inp} data-testid="pack-name" /></L>
       <div className="mt-3"><L label="Description"><textarea rows={2} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} className={inp} data-testid="pack-desc" /></L></div>
       <div className="mt-3"><L label="Image du coffret"><ImageUpload value={f.image} onChange={(url) => setF({ ...f, image: url })} /></L></div>
-      <div className="mt-3"><L label="Produits inclus"><ComplementarySelector value={f.product_ids} onChange={(ids) => setF({ ...f, product_ids: ids })} /></L></div>
+      <div className="mt-3"><L label="Produits inclus"><BulkProductSelector value={f.product_ids} onChange={(ids) => setF({ ...f, product_ids: ids })} testid="pack-products" /></L></div>
       <div className="mt-3"><L label="Prix du coffret (DA)"><input type="number" value={f.price} onChange={(e) => setF({ ...f, price: e.target.value })} className={inp} data-testid="pack-price" /></L></div>
       <label className="flex items-center gap-2 text-sm mt-3"><input type="checkbox" checked={f.enabled !== false} onChange={(e) => setF({ ...f, enabled: e.target.checked })} className="accent-mint-600 w-4 h-4" /> Visible sur le site</label>
       <button onClick={save} disabled={busy} data-testid="pack-save" className="w-full mt-4 py-3 rounded-full bg-mint-600 text-white font-semibold disabled:opacity-50">{busy ? "…" : "Enregistrer"}</button>
@@ -1227,7 +1229,7 @@ function GiftAdminPanel() {
         <div>
           <h3 className="font-display font-bold text-lg mb-1">Idées cadeaux</h3>
           <L label="Texte d'introduction"><textarea rows={2} value={f.gift_intro || ""} onChange={(e) => setF({ ...f, gift_intro: e.target.value })} className={inp} data-testid="gift-intro-input" /></L>
-          <div className="mt-3"><L label="Produits mis en avant"><ComplementarySelector value={f.gift_featured_ids} onChange={(ids) => setF({ ...f, gift_featured_ids: ids })} /></L></div>
+          <div className="mt-3"><L label="Produits mis en avant"><BulkProductSelector value={f.gift_featured_ids} onChange={(ids) => setF({ ...f, gift_featured_ids: ids })} testid="gift-featured" /></L></div>
         </div>
         <div className="border-t border-mint-100 pt-4">
           <h3 className="font-display font-bold text-lg mb-1">Carte cadeau</h3>
@@ -1337,6 +1339,13 @@ function LoyaltyAdminPanel() {
   const delRw = (i) => setF({ ...f, loyalty_rewards: rewards.filter((_, x) => x !== i) });
   // gifts per tier
   const addProductGift = (i, p) => setTier(i, { gifts: [...(tiers[i].gifts || []), { id: `g${Date.now()}`, type: "product", product_id: p.id, name: p.name, image: p.images?.[0] || null }] });
+  const setProductGiftIds = (i, ids) => {
+    const existing = tiers[i].gifts || [];
+    const custom = existing.filter((g) => g.type !== "product");
+    const prevProd = existing.filter((g) => g.type === "product");
+    const prod = ids.map((id) => prevProd.find((g) => g.product_id === id) || { id: `g${Date.now()}_${id.slice(-5)}`, type: "product", product_id: id });
+    setTier(i, { gifts: [...custom, ...prod] });
+  };
   const addCustomGift = (i) => setTier(i, { gifts: [...(tiers[i].gifts || []), { id: `g${Date.now()}`, type: "custom", name: "", image: null }] });
   const setGift = (i, j, patch) => { const g = [...(tiers[i].gifts || [])]; g[j] = { ...g[j], ...patch }; setTier(i, { gifts: g }); };
   const delGift = (i, j) => setTier(i, { gifts: (tiers[i].gifts || []).filter((_, x) => x !== j) });
@@ -1350,7 +1359,7 @@ function LoyaltyAdminPanel() {
     try {
       await api.put("/settings", {
         loyalty_enabled: f.loyalty_enabled, loyalty_points_per_100da: Number(f.loyalty_points_per_100da) || 1,
-        loyalty_tiers: tiers.map((t) => ({ name: t.name, min: Number(t.min) || 0, perks: (t.perks || []).filter((p) => p && p.trim()), gifts: (t.gifts || []).filter((g) => g.name && g.name.trim()) })),
+        loyalty_tiers: tiers.map((t) => ({ name: t.name, min: Number(t.min) || 0, perks: (t.perks || []).filter((p) => p && p.trim()), gifts: (t.gifts || []).filter((g) => (g.type === "product" && g.product_id) || (g.name && g.name.trim())) })),
         loyalty_rewards: rewards.map((r) => ({ ...r, points: Number(r.points) || 0, value: Number(r.value) || 0 })),
         loyalty_offers: offers.map((o) => ({ id: o.id, title: o.title, discount_type: o.discount_type, discount_value: Number(o.discount_value) || 0, product_ids: o.product_ids || [], tiers: o.tiers || [], enabled: o.enabled !== false })),
         referral_enabled: f.referral_enabled,
@@ -1406,27 +1415,19 @@ function LoyaltyAdminPanel() {
                 </div>
                 <div className="mt-3 pt-3 border-t border-mint-50">
                   <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1.5"><Gift className="w-3.5 h-3.5 text-mint-600" /> Cadeaux offerts pour ce statut</div>
+                  <div className="text-[11px] font-semibold text-slate-400 mb-1">Produits du catalogue</div>
+                  <BulkProductSelector value={(t.gifts || []).filter((g) => g.type === "product").map((g) => g.product_id)} onChange={(ids) => setProductGiftIds(i, ids)} testid={`tier-${i}-giftpick`} />
+                  <div className="text-[11px] font-semibold text-slate-400 mt-3 mb-1">Cadeaux exclusifs (hors catalogue)</div>
                   <div className="space-y-2 mb-2">
-                    {(t.gifts || []).map((g, j) => (
+                    {(t.gifts || []).map((g, j) => g.type === "product" ? null : (
                       <div key={g.id || j} className="flex items-center gap-2 bg-mint-50/40 rounded-xl p-2" data-testid={`tier-${i}-gift-${j}`}>
-                        {g.type === "product" ? (
-                          <>
-                            {g.image && <img src={mediaUrl(g.image)} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0" />}
-                            <span className="flex-1 text-sm min-w-0"><span className="line-clamp-1">{g.name}</span><span className="text-[11px] text-slate-400">Produit du catalogue</span></span>
-                          </>
-                        ) : (
-                          <>
-                            <div className="shrink-0"><ImageUpload value={g.image} onChange={(url) => setGift(i, j, { image: url })} /></div>
-                            <input value={g.name} onChange={(e) => setGift(i, j, { name: e.target.value })} placeholder="Nom du cadeau exclusif" className={`${inp} flex-1`} data-testid={`tier-${i}-gift-name-${j}`} />
-                          </>
-                        )}
+                        <div className="shrink-0"><ImageUpload value={g.image} onChange={(url) => setGift(i, j, { image: url })} /></div>
+                        <input value={g.name} onChange={(e) => setGift(i, j, { name: e.target.value })} placeholder="Nom du cadeau exclusif" className={`${inp} flex-1`} data-testid={`tier-${i}-gift-name-${j}`} />
                         <button onClick={() => delGift(i, j)} className="text-slate-400 hover:text-red-500 shrink-0" data-testid={`tier-${i}-gift-del-${j}`}><Trash2 className="w-4 h-4" /></button>
                       </div>
                     ))}
-                    {(t.gifts || []).length === 0 && <p className="text-xs text-slate-400">Aucun cadeau pour ce statut.</p>}
                   </div>
-                  <GiftProductAdd onAdd={(p) => addProductGift(i, p)} />
-                  <button onClick={() => addCustomGift(i)} data-testid={`tier-${i}-gift-add-custom`} className="flex items-center gap-1.5 text-mint-700 text-xs font-semibold mt-2"><Plus className="w-3.5 h-3.5" /> Ajouter un cadeau exclusif (hors catalogue)</button>
+                  <button onClick={() => addCustomGift(i)} data-testid={`tier-${i}-gift-add-custom`} className="flex items-center gap-1.5 text-mint-700 text-xs font-semibold"><Plus className="w-3.5 h-3.5" /> Ajouter un cadeau exclusif (hors catalogue)</button>
                 </div>
               </div>
             </div>
@@ -1483,7 +1484,7 @@ function LoyaltyAdminPanel() {
               </div>
               <div>
                 <div className="text-xs font-medium text-slate-500 mb-1">Produits concernés</div>
-                <ComplementarySelector value={o.product_ids} onChange={(ids) => setOffer(i, { product_ids: ids })} />
+                <BulkProductSelector value={o.product_ids} onChange={(ids) => setOffer(i, { product_ids: ids })} testid={`offer-products-${i}`} />
               </div>
             </div>
           ))}

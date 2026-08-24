@@ -125,6 +125,12 @@ Site e-commerce de parapharmacie "Pharma360" basé en Algérie, inspiré de phar
 - **Nouveaux thèmes** : rose (Rose poudré), mauve (Mauve pâle), gold (Doré), noir (Noir) ajoutés au sélecteur Apparence en plus des 4 saisons. Classes CSS `theme-rose/mauve/gold/noir`.
 - Tests : backend 10/10, frontend 100% sur les 6 flux (iteration_20).
 
+## Implemented (2026-06 — iteration 22 : Sélection de produits en masse)
+- **BulkProductSelector** (`/app/frontend/src/components/admin/BulkProductSelector.jsx`) : arbre catégories/sous-catégories (aplati, sans récursion pour éviter un stack-overflow babel/webpack), liste des produits d'une catégorie avec cases à cocher, « Tout sélectionner » (liste courante), décochage individuel, recherche. Chips des produits sélectionnés.
+- Appliqué dans **5 zones admin** : Idées cadeaux (`gift-featured`), Coffrets cadeaux (`pack-products`), Cadeaux par statut Bronze/Silver/Gold (`tier-{i}-giftpick`), Offres exclusives (`offer-products-{i}`), et produits complémentaires de la fiche produit (`pf-comp`). Remplace l'ancien `ComplementarySelector` (recherche un-par-un).
+- Cadeaux produits stockés en `type:"product"` + `product_id` (nom/image résolus côté backend) ; cadeaux hors-catalogue en `type:"custom"` + nom + image.
+- Tests : frontend 100% (6/6 flux — iteration_22). Aucune régression.
+
 ## Implemented (2026-06 — iteration 21 : Fidélité avancée + Thèmes 2 couleurs)
 - **Bug statut corrigé** : `_loyalty_tier` renvoie `null` si les points sont sous le seuil du plus petit palier. Le statut est calculé en direct → modifier un seuil dans l'admin réévalue TOUS les clients instantanément. Badge « Nouveau membre » (neutre) sous le seuil.
 - **Cadeaux par statut** : chaque palier (BRONZE/Silver/Gold) a sa propre liste de cadeaux — produits du catalogue OU cadeaux exclusifs (nom+photo). CRUD dans Admin > Fidélité (`gifts` dans `loyalty_tiers`).
