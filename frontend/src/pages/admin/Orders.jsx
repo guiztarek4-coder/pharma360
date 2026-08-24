@@ -37,7 +37,7 @@ export default function Orders() {
                   <div>
                     <p className="font-mono text-sm font-semibold text-obsidian">#{o.id.slice(0, 8).toUpperCase()}</p>
                     <p className="text-xs text-stone2">{fmtDate(o.created_at)} · {o.customer?.name} · <span className="font-mono">{o.customer?.phone}</span></p>
-                    <p className="mt-0.5 text-xs text-stone2">{o.customer?.address}</p>
+                    <p className="mt-0.5 text-xs text-stone2">{o.customer?.wilaya ? `${o.customer.wilaya} — ` : ""}{o.customer?.address}</p>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className={`rounded-full px-3 py-1 text-xs font-bold ${st.cls}`} data-testid={`admin-order-status-${o.id}`}>{st.label}</span>
@@ -45,7 +45,10 @@ export default function Orders() {
                       className="input-field !w-auto !rounded-full !py-1.5 text-xs font-semibold">
                       {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                     </select>
-                    <span className="font-mono text-sm font-semibold text-brand">{fmtPrice(o.total)}</span>
+                    <span className="text-right">
+                      <span className="block font-mono text-sm font-semibold text-brand">{fmtPrice(o.total)}</span>
+                      <span className="block text-[10px] text-stone2">dont livraison {o.delivery_fee > 0 ? fmtPrice(o.delivery_fee) : "offerte"}</span>
+                    </span>
                   </div>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">

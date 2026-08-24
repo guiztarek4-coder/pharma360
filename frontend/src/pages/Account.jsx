@@ -123,6 +123,7 @@ export default function Account() {
                         </span>
                       ))}
                     </div>
+                    <p className="mt-3 text-xs text-stone2" data-testid={`order-shipping-${o.id}`}>Livraison {o.customer?.wilaya ? `(${o.customer.wilaya})` : ""} : {o.delivery_fee > 0 ? fmtPrice(o.delivery_fee) : "offerte"}</p>
                     {o.points_earned > 0 && (
                       <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-brand">
                         <Tag size={12} />

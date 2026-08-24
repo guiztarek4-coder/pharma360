@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, Package, ShoppingCart, MessageCircle, Award, Palette, Leaf } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingCart, MessageCircle, Award, Palette, Leaf, Truck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import Dashboard from "./Dashboard";
 import Products from "./Products";
@@ -8,6 +8,7 @@ import Orders from "./Orders";
 import AdminChat from "./AdminChat";
 import LoyaltyAdmin from "./LoyaltyAdmin";
 import ThemeAdmin from "./ThemeAdmin";
+import DeliveryAdmin from "./DeliveryAdmin";
 
 const TABS = [
   { key: "dashboard", label: "Tableau de bord", icon: LayoutDashboard, testid: "admin-tab-dashboard" },
@@ -15,6 +16,7 @@ const TABS = [
   { key: "commandes", label: "Commandes", icon: ShoppingCart, testid: "admin-tab-commandes" },
   { key: "chat", label: "Chat clients", icon: MessageCircle, testid: "admin-tab-chat" },
   { key: "fidelite", label: "Fidélité", icon: Award, testid: "admin-tab-fidelite" },
+  { key: "livraison", label: "Livraison & Alertes", icon: Truck, testid: "admin-tab-livraison" },
   { key: "theme", label: "Thème & Site", icon: Palette, testid: "admin-tab-theme" },
 ];
 
@@ -55,6 +57,7 @@ export default function Admin() {
         {tab === "commandes" && <Orders />}
         {tab === "chat" && <AdminChat />}
         {tab === "fidelite" && <LoyaltyAdmin />}
+        {tab === "livraison" && <DeliveryAdmin />}
         {tab === "theme" && <ThemeAdmin />}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Minus, Plus, Trash2, ShoppingBag, CheckCircle2, Sparkles } from "lucide-react";
@@ -11,9 +11,22 @@ export default function Cart() {
   const { user } = useAuth();
   const { items, setQty, removeFromCart, clearCart, total, priceOf } = useCart();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: user?.name || "", phone: user?.phone || "", email: user?.email || "", address: "" });
+  const [form, setForm] = useState({ name: user?.name || "", phone: user?.phone || "", email: user?.email || "", address: "", wilaya: "" });
   const [placing, setPlacing] = useState(false);
   const [done, setDone] = useState(null);
+  const [delivery, setDelivery] = useState(null);
+
+  useEffect(() => {
+    api.get("/delivery").then((r) => setDelivery(r.data)).catch(() => {});
+  }, []);
+
+  const shippingFee = (() => {
+    if (!delivery || !form.wilaya) return 0;
+    const fee = delivery.wilayas.find((w) => w.name === form.wilaya)?.fee ?? 0;
+    if (delivery.free_enabled && delivery.free_threshold > 0 && total >= delivery.free_threshold) return 0;
+    return fee;
+  })();
+  const grandTotal = total + shippingFee;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -48,6 +61,9 @@ export default function Cart() {
               Un email de confirmation a été envoyé à <span className="font-semibold text-brand">{done.customer.email}</span>.
             </p>
           )}
+          <p className="mt-2 text-sm text-stone2" data-testid="order-shipping-line">
+            Livraison {done.customer?.wilaya ? `(${done.customer.wilaya})` : ""} : {done.delivery_fee > 0 ? fmtPrice(done.delivery_fee) : "offerte"}.
+          </p>
           {done.points_earned > 0 && (
             <p className="mx-auto mt-5 flex max-w-md items-center justify-center gap-2 rounded-2xl bg-brand-pale p-4 text-sm font-medium text-brand" data-testid="points-earned">
               <Sparkles size={16} /> Vous gagnerez <strong>{done.points_earned} points fidélité</strong> à la livraison de votre commande.
@@ -119,16 +135,34 @@ export default function Cart() {
                   data-testid="checkout-phone" className="input-field" />
                 <input type="email" placeholder="Email (recevoir la confirmation de commande)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
                   data-testid="checkout-email" className="input-field" />
+                <select required value={form.wilaya} onChange={(e) => setForm({ ...form, wilaya: e.target.value })}
+                  data-testid="checkout-wilaya" className="input-field">
+                  <option value="">Wilaya de livraison…</option>
+                  {(delivery?.wilayas || []).map((w) => (
+                    <option key={w.code} value={w.name}>{w.code} — {w.name} ({w.fee} DA)</option>
+                  ))}
+                </select>
                 <textarea required placeholder="Adresse de livraison complète" rows={3} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })}
                   data-testid="checkout-address" className="input-field resize-none" />
               </div>
               <div className="mt-6 space-y-2 border-t pt-5">
                 <div className="flex justify-between text-sm text-stone2">
-                  <span>Livraison</span><span className="font-medium text-brand">Paiement à la livraison</span>
+                  <span>Sous-total</span><span className="font-mono">{fmtPrice(total)}</span>
                 </div>
+                <div className="flex justify-between text-sm text-stone2">
+                  <span>Livraison {form.wilaya ? `(${form.wilaya})` : ""}</span>
+                  <span className="font-mono" data-testid="shipping-fee">
+                    {!form.wilaya ? "—" : shippingFee === 0 ? "Offerte" : fmtPrice(shippingFee)}
+                  </span>
+                </div>
+                {delivery?.free_enabled && delivery.free_threshold > 0 && total < delivery.free_threshold && (
+                  <p className="rounded-xl bg-brand-pale px-3 py-2 text-xs font-medium text-brand" data-testid="free-shipping-hint">
+                    Plus que {fmtPrice(delivery.free_threshold - total)} pour la livraison offerte !
+                  </p>
+                )}
                 <div className="flex justify-between">
-                  <span className="font-semibold text-obsidian">Total</span>
-                  <span className="font-mono text-xl font-semibold text-brand" data-testid="cart-total">{fmtPrice(total)}</span>
+                  <span className="font-semibold text-obsidian">Total <span className="text-xs font-normal text-stone2">(paiement à la livraison)</span></span>
+                  <span className="font-mono text-xl font-semibold text-brand" data-testid="cart-total">{fmtPrice(grandTotal)}</span>
                 </div>
               </div>
               <button type="submit" disabled={placing} data-testid="place-order-button"

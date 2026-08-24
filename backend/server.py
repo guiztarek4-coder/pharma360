@@ -149,6 +149,7 @@ class CustomerIn(BaseModel):
     name: str
     phone: str
     email: Optional[str] = ""
+    wilaya: str = ""
     address: str
 
 
@@ -445,6 +446,8 @@ async def send_order_confirmation_email(order: dict, to: str, name: str):
         f'<p style="font-size:14px;color:#181C14;line-height:1.6">Votre commande <strong>#{escape(ref)}</strong> est bien confirmée. '
         "Paiement à la livraison — notre équipe vous contactera si besoin.</p>"
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0">{rows}</table>'
+        f'<p style="font-size:13px;color:#73786D">Livraison {("(" + escape(order["customer"].get("wilaya", "")) + ")") if order["customer"].get("wilaya") else ""} : '
+        f'{"<strong>Offerte</strong>" if not order.get("delivery_fee") else _fmt_da(order["delivery_fee"])}</p>'
         f'<p style="font-size:16px;color:#181C14;border-top:1px solid #E2DED6;padding-top:14px">Total : <strong style="color:#3E4E30">{_fmt_da(order["total"])}</strong></p>'
         f'{points_html}'
         f'<p style="font-size:13px;color:#73786D;line-height:1.6">Suivez votre commande depuis '
@@ -464,6 +467,33 @@ async def send_reset_email(to: str, link: str):
     )
     await send_email(to=to, subject=f"Réinitialisation de votre mot de passe — {EMAIL_FROM_NAME}",
                      html=_email_layout("Mot de passe oublié", content))
+
+
+async def send_admin_order_alert(order: dict):
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    notify = ((s or {}).get("delivery") or {}).get("notify_email")
+    if not notify:
+        return
+    ref = order["id"][:8].upper()
+    cust = order["customer"]
+    rows = "".join(
+        f'<tr><td style="padding:5px 0;font-size:13px;color:#181C14">{escape(it["name"])} × {it["qty"]}</td>'
+        f'<td align="right" style="padding:5px 0;font-size:13px;color:#3E4E30;font-weight:bold">{_fmt_da(it["unit_price"] * it["qty"])}</td></tr>'
+        for it in order["items"]
+    )
+    content = (
+        '<p style="font-size:14px;color:#181C14;line-height:1.6">Une nouvelle commande vient d\'être passée sur le site :</p>'
+        f'<p style="font-size:14px;color:#181C14;line-height:1.7">'
+        f'<strong>Commande :</strong> #{escape(ref)}<br/>'
+        f'<strong>Client :</strong> {escape(cust.get("name", ""))} · {escape(cust.get("phone", ""))}<br/>'
+        f'<strong>Livraison :</strong> {escape(cust.get("wilaya", ""))} — {escape(cust.get("address", ""))}</p>'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:10px 0">{rows}</table>'
+        f'<p style="font-size:13px;color:#73786D">Frais de livraison : {"Offerts" if not order.get("delivery_fee") else _fmt_da(order["delivery_fee"])}</p>'
+        f'<p style="font-size:16px;color:#181C14;border-top:1px solid #E2DED6;padding-top:12px">Total à encaisser : <strong style="color:#3E4E30">{_fmt_da(order["total"])}</strong></p>'
+        f'<p style="font-size:13px"><a href="{FRONTEND_URL}/admin" style="color:#C86D51;font-weight:bold">Ouvrir le back-office pour traiter la commande</a></p>'
+    )
+    await send_email(to=notify, subject=f"Nouvelle commande #{ref} — {EMAIL_FROM_NAME}",
+                     html=_email_layout("Nouvelle commande reçue", content))
 
 
 # ---------- Products & Categories ----------
@@ -517,12 +547,19 @@ async def create_order(data: OrderIn, request: Request):
         total += unit * it.qty
         items_out.append({"product_id": p["id"], "name": p["name"], "image": p.get("image", ""),
                           "unit_price": unit, "qty": it.qty})
-    total = round(total, 2)
-    points = int(total // 100) if user else 0
+    subtotal = round(total, 2)
+    dcfg = ((await db.settings.find_one({"key": "site"})) or {}).get("delivery", DEFAULT_DELIVERY)
+    fee = next((w["fee"] for w in dcfg.get("wilayas", []) if w["name"] == data.customer.wilaya), 0)
+    threshold = dcfg.get("free_threshold", 0)
+    if dcfg.get("free_enabled") and threshold > 0 and subtotal >= threshold:
+        fee = 0
+    grand_total = round(subtotal + fee, 2)
+    points = int(subtotal // 100) if user else 0
     doc = {
         "id": uid(), "user_id": user["id"] if user else None,
         "customer": data.customer.model_dump(), "items": items_out,
-        "total": total, "status": "en_attente", "payment": "Paiement à la livraison",
+        "subtotal": subtotal, "delivery_fee": fee,
+        "total": grand_total, "status": "en_attente", "payment": "Paiement à la livraison",
         "points_earned": points, "points_credited": False,
         "created_at": now().isoformat(),
     }
@@ -536,6 +573,10 @@ async def create_order(data: OrderIn, request: Request):
             await send_order_confirmation_email(doc, recipient, data.customer.name)
         except Exception as e:
             logger.error(f"Email confirmation commande impossible: {e}")
+    try:
+        await send_admin_order_alert(doc)
+    except Exception as e:
+        logger.error(f"Email alerte admin impossible: {e}")
     return doc
 
 
@@ -654,7 +695,22 @@ async def public_settings():
     return s
 
 
+@api.get("/delivery")
+async def delivery_public():
+    s = await db.settings.find_one({"key": "site"}, {"_id": 0})
+    d = (s or {}).get("delivery", DEFAULT_DELIVERY)
+    return {
+        "free_enabled": d.get("free_enabled", False),
+        "free_threshold": d.get("free_threshold", 0),
+        "wilayas": d.get("wilayas", []),
+    }
+
+
 # ---------- Admin ----------
+
+@api.get("/admin/settings")
+async def get_settings(admin=Depends(get_admin)):
+    return await db.settings.find_one({"key": "site"}, {"_id": 0})
 
 @api.get("/admin/stats")
 async def admin_stats(admin=Depends(get_admin)):
@@ -879,6 +935,73 @@ DEFAULT_LOYALTY = {
 }
 
 
+DEFAULT_DELIVERY = {
+    "notify_email": "",
+    "free_enabled": True,
+    "free_threshold": 10000,
+    "wilayas": [
+        {"code": "01", "name": "Adrar", "fee": 900},
+        {"code": "02", "name": "Chlef", "fee": 600},
+        {"code": "03", "name": "Laghouat", "fee": 800},
+        {"code": "04", "name": "Oum El Bouaghi", "fee": 700},
+        {"code": "05", "name": "Batna", "fee": 700},
+        {"code": "06", "name": "Béjaïa", "fee": 600},
+        {"code": "07", "name": "Biskra", "fee": 800},
+        {"code": "08", "name": "Béchar", "fee": 900},
+        {"code": "09", "name": "Blida", "fee": 500},
+        {"code": "10", "name": "Bouira", "fee": 600},
+        {"code": "11", "name": "Tamanrasset", "fee": 1200},
+        {"code": "12", "name": "Tébessa", "fee": 800},
+        {"code": "13", "name": "Tlemcen", "fee": 700},
+        {"code": "14", "name": "Tiaret", "fee": 700},
+        {"code": "15", "name": "Tizi Ouzou", "fee": 600},
+        {"code": "16", "name": "Alger", "fee": 400},
+        {"code": "17", "name": "Djelfa", "fee": 800},
+        {"code": "18", "name": "Jijel", "fee": 600},
+        {"code": "19", "name": "Sétif", "fee": 600},
+        {"code": "20", "name": "Saïda", "fee": 700},
+        {"code": "21", "name": "Skikda", "fee": 600},
+        {"code": "22", "name": "Sidi Bel Abbès", "fee": 700},
+        {"code": "23", "name": "Annaba", "fee": 600},
+        {"code": "24", "name": "Guelma", "fee": 700},
+        {"code": "25", "name": "Constantine", "fee": 600},
+        {"code": "26", "name": "Médéa", "fee": 600},
+        {"code": "27", "name": "Mostaganem", "fee": 600},
+        {"code": "28", "name": "M'Sila", "fee": 700},
+        {"code": "29", "name": "Mascara", "fee": 700},
+        {"code": "30", "name": "Ouargla", "fee": 900},
+        {"code": "31", "name": "Oran", "fee": 600},
+        {"code": "32", "name": "El Bayadh", "fee": 900},
+        {"code": "33", "name": "Illizi", "fee": 1200},
+        {"code": "34", "name": "Bordj Bou Arréridj", "fee": 700},
+        {"code": "35", "name": "Boumerdès", "fee": 500},
+        {"code": "36", "name": "El Tarf", "fee": 700},
+        {"code": "37", "name": "Tindouf", "fee": 1200},
+        {"code": "38", "name": "Tissemsilt", "fee": 700},
+        {"code": "39", "name": "El Oued", "fee": 900},
+        {"code": "40", "name": "Khenchela", "fee": 800},
+        {"code": "41", "name": "Souk Ahras", "fee": 700},
+        {"code": "42", "name": "Tipaza", "fee": 500},
+        {"code": "43", "name": "Mila", "fee": 700},
+        {"code": "44", "name": "Aïn Defla", "fee": 600},
+        {"code": "45", "name": "Naâma", "fee": 900},
+        {"code": "46", "name": "Aïn Témouchent", "fee": 700},
+        {"code": "47", "name": "Ghardaïa", "fee": 900},
+        {"code": "48", "name": "Relizane", "fee": 700},
+        {"code": "49", "name": "Timimoun", "fee": 1100},
+        {"code": "50", "name": "Bordj Badji Mokhtar", "fee": 1200},
+        {"code": "51", "name": "Ouled Djellal", "fee": 900},
+        {"code": "52", "name": "Béni Abbès", "fee": 1100},
+        {"code": "53", "name": "In Salah", "fee": 1100},
+        {"code": "54", "name": "In Guezzam", "fee": 1200},
+        {"code": "55", "name": "Touggourt", "fee": 900},
+        {"code": "56", "name": "Djanet", "fee": 1200},
+        {"code": "57", "name": "El M'Ghair", "fee": 900},
+        {"code": "58", "name": "El Meniaa", "fee": 1000},
+    ],
+}
+
+
 async def seed():
     await db.users.create_index("email", unique=True)
     await db.password_reset_tokens.create_index("expires_at")
@@ -911,6 +1034,8 @@ async def seed():
 
     if not await db.settings.find_one({"key": "site"}):
         await db.settings.insert_one(DEFAULT_SETTINGS)
+    await db.settings.update_one({"key": "site", "delivery": {"$exists": False}},
+                                 {"$set": {"delivery": DEFAULT_DELIVERY}})
     if not await db.loyalty_config.find_one({"key": "loyalty"}):
         await db.loyalty_config.insert_one(DEFAULT_LOYALTY)
     logger.info("Seed terminé")
