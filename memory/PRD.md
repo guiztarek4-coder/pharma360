@@ -14,6 +14,7 @@ Créer un nouveau site e-commerce de parapharmacie « L'olivier », réplique fo
 - Admin : back-office complet
 
 ## Implémenté (24/08/2026)
+- Emails transactionnels réels via Resend managé (proxy Emergent) : confirmation de commande (membre ou invité avec email, template HTML brandé L'olivier, détail articles + total + points) et lien de réinitialisation mot de passe (valable 1h, plus de mode démo). Champ email ajouté au checkout. Gate anti-phishing (liens https first-party, pas de formulaires) appliqué à chaque envoi.
 - Auth JWT complète : inscription, connexion, mot de passe oublié + réinitialisation (lien démo affiché), protection brute-force
 - Catalogue : 12 produits seedés, filtres catégories + recherche, prix standard barré + Prix Membre
 - Panier + commande (invité ou membre), décrément stock, points 1pt/100 DA crédités automatiquement au statut « Livrée »
@@ -30,7 +31,6 @@ Créer un nouveau site e-commerce de parapharmacie « L'olivier », réplique fo
 ## Backlog
 - P1 : notifications admin (nouvelle commande / nouveau message chat), badge non-lus sur le chat
 - P1 : upload d'images produits (object storage) au lieu d'URL
-- P2 : emails transactionnels (confirmation commande, reset mot de passe réel) via Resend
 - P2 : paiement en ligne (Stripe/CIB), frais de livraison par wilaya
 - P2 : historique des points (journal des gains)
 - P3 : mode sombre complet, avis clients produits

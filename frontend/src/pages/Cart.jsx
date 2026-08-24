@@ -11,7 +11,7 @@ export default function Cart() {
   const { user } = useAuth();
   const { items, setQty, removeFromCart, clearCart, total, priceOf } = useCart();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: user?.name || "", phone: user?.phone || "", address: "" });
+  const [form, setForm] = useState({ name: user?.name || "", phone: user?.phone || "", email: user?.email || "", address: "" });
   const [placing, setPlacing] = useState(false);
   const [done, setDone] = useState(null);
 
@@ -43,6 +43,11 @@ export default function Cart() {
             Référence <span className="font-mono font-semibold text-brand">{done.id.slice(0, 8).toUpperCase()}</span> — Total <span className="font-mono font-semibold">{fmtPrice(done.total)}</span>.
             Paiement à la livraison.
           </p>
+          {done.customer?.email && (
+            <p className="mt-3 text-sm text-stone2" data-testid="confirmation-email-note">
+              Un email de confirmation a été envoyé à <span className="font-semibold text-brand">{done.customer.email}</span>.
+            </p>
+          )}
           {done.points_earned > 0 && (
             <p className="mx-auto mt-5 flex max-w-md items-center justify-center gap-2 rounded-2xl bg-brand-pale p-4 text-sm font-medium text-brand" data-testid="points-earned">
               <Sparkles size={16} /> Vous gagnerez <strong>{done.points_earned} points fidélité</strong> à la livraison de votre commande.
@@ -112,6 +117,8 @@ export default function Cart() {
                   data-testid="checkout-name" className="input-field" />
                 <input required placeholder="Téléphone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
                   data-testid="checkout-phone" className="input-field" />
+                <input type="email" placeholder="Email (recevoir la confirmation de commande)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  data-testid="checkout-email" className="input-field" />
                 <textarea required placeholder="Adresse de livraison complète" rows={3} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })}
                   data-testid="checkout-address" className="input-field resize-none" />
               </div>

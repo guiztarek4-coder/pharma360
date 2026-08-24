@@ -2,13 +2,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+import re
 import uuid
 import secrets
 import logging
+import ipaddress
 from datetime import datetime, timezone, timedelta
+from html import escape
+from html.parser import HTMLParser
 from typing import Optional, List
+from urllib.parse import urlparse
 
 import bcrypt
+import httpx
 import jwt
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -142,6 +148,7 @@ class OrderItemIn(BaseModel):
 class CustomerIn(BaseModel):
     name: str
     phone: str
+    email: Optional[str] = ""
     address: str
 
 
@@ -281,11 +288,12 @@ async def forgot_password(data: ForgotIn):
         "token": token, "email": email,
         "expires_at": (now() + timedelta(hours=1)).isoformat(), "used": False,
     })
-    logger.info(f"Reset link for {email}: /reinitialiser?token={token}")
-    return {
-        "message": "Lien de réinitialisation généré (mode démo : affiché directement).",
-        "reset_link": f"/reinitialiser?token={token}",
-    }
+    link = f"{FRONTEND_URL}/reinitialiser?token={token}"
+    try:
+        await send_reset_email(email, link)
+    except Exception as e:
+        logger.error(f"Envoi email reset impossible: {e}")
+    return {"message": "Si un compte existe, un email de réinitialisation vient d'être envoyé (valable 1h)."}
 
 
 @api.post("/auth/reset-password")
@@ -301,6 +309,161 @@ async def reset_password(data: ResetIn):
                               {"$set": {"password_hash": hash_password(data.new_password)}})
     await db.password_reset_tokens.update_one({"token": data.token}, {"$set": {"used": True}})
     return {"message": "Mot de passe mis à jour. Vous pouvez vous connecter."}
+
+
+# ---------- Emails (proxy Resend géré par Emergent) ----------
+
+EMAIL_BASE_URL = "https://integrations.emergentagent.com"
+EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY", "")
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "L'olivier")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+
+_SHORTENERS = ("bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly", "goo.gl", "rebrand.ly")
+_CRED_ASK = ("reply with your password", "reply with the code", "send your password", "cvv",
+             "send us your password", "enter your password below", "confirm your card number",
+             "your full card number", "seed phrase", "recovery phrase", "verify your card",
+             "social security number", "confirm your bank details")
+_HOSTISH = re.compile(r"\b(?:https?://)?((?:[a-z0-9-]+\.)+[a-z]{2,})", re.I)
+
+
+def _host_ok(host: str) -> bool:
+    if not host or "xn--" in host:
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return False
+    except ValueError:
+        pass
+    return not any(host == s or host.endswith("." + s) for s in _SHORTENERS)
+
+
+def _same_site(shown: str, real: str) -> bool:
+    return shown == real or real.endswith("." + shown) or shown.endswith("." + real)
+
+
+class _EmailScan(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.tags, self.urls, self.anchors = set(), [], []
+        self._href, self._text = None, []
+
+    def handle_starttag(self, tag, attrs):
+        self.tags.add(tag.lower())
+        self.urls += [v for k, v in attrs if k.lower() in ("href", "src") and v]
+        if tag.lower() == "a":
+            self._href = dict((k.lower(), v) for k, v in attrs).get("href")
+            self._text = []
+
+    def handle_data(self, data):
+        if self._href is not None:
+            self._text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag.lower() == "a" and self._href is not None:
+            self.anchors.append((self._href, "".join(self._text)))
+            self._href, self._text = None, []
+
+
+def _assert_safe_email(subject: str, html: str) -> None:
+    scan = _EmailScan()
+    scan.feed(html)
+    if scan.tags & {"form", "input", "textarea", "select"}:
+        raise ValueError("No forms or input fields in email (G2)")
+    body = f"{subject}\n{html}".lower()
+    for p in _CRED_ASK:
+        if p in body:
+            raise ValueError(f"Email asks the recipient for credentials: {p!r} (G2)")
+    for url in scan.urls:
+        low = url.strip().lower()
+        if low.startswith(("mailto:", "tel:", "cid:", "#")):
+            continue
+        if not low.startswith("https://"):
+            raise ValueError(f"Email links/assets must be absolute https: {url!r} (G3)")
+        host = urlparse(low).hostname or ""
+        if not _host_ok(host) or urlparse(low).username is not None:
+            raise ValueError(f"Shortened, numeric-host or credential-bearing URL: {url!r} (G3)")
+    for href, text in scan.anchors:
+        real = urlparse(href.strip().lower()).hostname or ""
+        if not real:
+            continue
+        for m in _HOSTISH.finditer(text):
+            if not _same_site(m.group(1).lower(), real):
+                raise ValueError(f"Anchor text {m.group(1)!r} ≠ real link host {real!r} (G3)")
+
+
+async def send_email(*, to: str, subject: str, html: str, reply_to: Optional[str] = None):
+    _assert_safe_email(subject, html)
+    payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
+    if reply_to:
+        payload["contact_email"] = reply_to
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            f"{EMAIL_BASE_URL}/api/v1/email/send",
+            headers={"X-Email-Key": EMAIL_KEY},
+            json=payload,
+        )
+    resp.raise_for_status()
+    email_id = resp.json().get("id")
+    logger.info(f"Email envoyé à {to} (id={email_id})")
+    return email_id
+
+
+def _fmt_da(n) -> str:
+    return f"{float(n):,.0f}".replace(",", " ") + " DA"
+
+
+def _email_layout(title: str, content: str) -> str:
+    brand = escape(EMAIL_FROM_NAME)
+    return (
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FAF8F5;padding:32px 0">'
+        '<tr><td align="center">'
+        '<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;font-family:Arial,sans-serif">'
+        f'<tr><td style="background:#3E4E30;padding:22px 32px"><span style="color:#FAF8F5;font-size:20px;font-weight:bold">{brand}</span></td></tr>'
+        f'<tr><td style="padding:32px"><p style="font-size:20px;color:#181C14;font-weight:bold;margin:0 0 16px">{escape(title)}</p>{content}</td></tr>'
+        '<tr><td style="padding:20px 32px;background:#F3EFEA;font-size:11px;color:#73786D;line-height:1.6">'
+        f'{brand} · 0770777685 / 0560285199 · Ouvert 7j/7 — 24h/24<br/>'
+        "Nous ne vous demanderons jamais votre mot de passe ni vos données bancaires par email."
+        "</td></tr></table></td></tr></table>"
+    )
+
+
+async def send_order_confirmation_email(order: dict, to: str, name: str):
+    ref = order["id"][:8].upper()
+    rows = "".join(
+        f'<tr><td style="padding:6px 0;font-size:14px;color:#181C14">{escape(it["name"])} × {it["qty"]}</td>'
+        f'<td align="right" style="padding:6px 0;font-size:14px;color:#3E4E30;font-weight:bold">{_fmt_da(it["unit_price"] * it["qty"])}</td></tr>'
+        for it in order["items"]
+    )
+    points_html = ""
+    if order.get("points_earned"):
+        points_html = (
+            f'<p style="font-size:13px;color:#3E4E30;background:#EAF0E6;padding:10px 14px;border-radius:10px">'
+            f'Membre Privilège : <strong>{order["points_earned"]} points</strong> seront crédités sur votre compte à la livraison.</p>'
+        )
+    content = (
+        f'<p style="font-size:14px;color:#181C14;line-height:1.6">Bonjour {escape(name)},</p>'
+        f'<p style="font-size:14px;color:#181C14;line-height:1.6">Votre commande <strong>#{escape(ref)}</strong> est bien confirmée. '
+        "Paiement à la livraison — notre équipe vous contactera si besoin.</p>"
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:12px 0">{rows}</table>'
+        f'<p style="font-size:16px;color:#181C14;border-top:1px solid #E2DED6;padding-top:14px">Total : <strong style="color:#3E4E30">{_fmt_da(order["total"])}</strong></p>'
+        f'{points_html}'
+        f'<p style="font-size:13px;color:#73786D;line-height:1.6">Suivez votre commande depuis '
+        f'<a href="{FRONTEND_URL}/compte" style="color:#C86D51;font-weight:bold">votre espace membre</a>.</p>'
+    )
+    await send_email(to=to, subject=f"Confirmation de votre commande #{ref} — {EMAIL_FROM_NAME}",
+                     html=_email_layout("Commande confirmée", content))
+
+
+async def send_reset_email(to: str, link: str):
+    content = (
+        '<p style="font-size:14px;color:#181C14;line-height:1.6">Bonjour,</p>'
+        f'<p style="font-size:14px;color:#181C14;line-height:1.6">Vous avez demandé la réinitialisation de votre mot de passe {escape(EMAIL_FROM_NAME)}. '
+        "Ce lien est valable 1 heure :</p>"
+        f'<p style="margin:24px 0"><a href="{link}" style="display:inline-block;background:#3E4E30;color:#FAF8F5;padding:13px 28px;border-radius:999px;text-decoration:none;font-weight:bold;font-size:14px">Réinitialiser mon mot de passe</a></p>'
+        '<p style="font-size:12px;color:#73786D;line-height:1.6">Si vous n\'êtes pas à l\'origine de cette demande, ignorez simplement cet email — votre mot de passe reste inchangé.</p>'
+    )
+    await send_email(to=to, subject=f"Réinitialisation de votre mot de passe — {EMAIL_FROM_NAME}",
+                     html=_email_layout("Mot de passe oublié", content))
 
 
 # ---------- Products & Categories ----------
@@ -367,6 +530,12 @@ async def create_order(data: OrderIn, request: Request):
     for it in data.items:
         await db.products.update_one({"id": it.product_id}, {"$inc": {"stock": -it.qty}})
     doc.pop("_id", None)
+    recipient = (user or {}).get("email") or data.customer.email
+    if recipient:
+        try:
+            await send_order_confirmation_email(doc, recipient, data.customer.name)
+        except Exception as e:
+            logger.error(f"Email confirmation commande impossible: {e}")
     return doc
 
 
@@ -621,10 +790,9 @@ async def root():
 
 app.include_router(api)
 
-frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_url, "http://localhost:3000"],
+    allow_origins=[FRONTEND_URL, "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
