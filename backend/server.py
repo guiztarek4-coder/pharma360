@@ -217,6 +217,7 @@ class OrderItem(BaseModel):
     price: float
     quantity: int
     image: Optional[str] = None
+    ecard: Optional[dict] = None  # {delivery, recipient_email, message, scheduled_date}
 
 
 class OrderInput(BaseModel):
@@ -231,6 +232,7 @@ class OrderInput(BaseModel):
     payment_method: str  # "cod" | "baridimob" | "card"
     delivery_method: str = "domicile"  # "pickup" | "domicile" | "relais"
     promo_code: str = ""
+    giftcard_code: str = ""
     notes: str = ""
 
 
@@ -518,13 +520,8 @@ async def forgot_password(data: ForgotPasswordInput, request: Request):
         s = await db.settings.find_one({"_id": "site"}) or {}
         sender = s.get("sender_email") or os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
         send_reset_email(email, link, sender)
-        # Fallback: return the link directly so the client can reset immediately
-        # (Resend free tier ne peut envoyer qu'à l'adresse vérifiée du compte).
-        return {"ok": True, "found": True, "reset_link": link,
-                "message": "Cliquez sur le bouton ci-dessous pour créer un nouveau mot de passe."}
     # Never reveal whether the email exists
-    return {"ok": True, "found": False, "reset_link": None,
-            "message": "Si un compte existe pour cet email, un lien de réinitialisation a été envoyé."}
+    return {"ok": True, "message": "Si un compte existe pour cet email, un lien de réinitialisation a été envoyé par email."}
 
 
 @api.post("/auth/reset-password")
@@ -1094,17 +1091,71 @@ async def mark_notifications_read(admin: dict = Depends(get_admin_user)):
 # Customers
 @api.get("/customers")
 async def list_customers(admin: dict = Depends(get_admin_user)):
-    users = await db.users.find({"role": "customer"}).sort("created_at", -1).to_list(1000)
+    users = await db.users.find({"role": "customer"}).sort("created_at", -1).to_list(2000)
+    s = await db.settings.find_one({"_id": "site"}) or {}
+    tiers = s.get("loyalty_tiers", [])
+    name_map = {str(u["_id"]): f"{u.get('first_name','')} {u.get('last_name','')}".strip() for u in users}
+    ref_counts = {}
+    for u in users:
+        rb = u.get("referred_by")
+        if rb:
+            ref_counts[rb] = ref_counts.get(rb, 0) + 1
     result = []
     for u in users:
-        count = await db.orders.count_documents({"user_id": str(u["_id"])})
+        uid = str(u["_id"])
+        count = await db.orders.count_documents({"user_id": uid})
+        points = int(u.get("loyalty_points", 0))
+        override = u.get("loyalty_tier_override")
+        tier, _ = _loyalty_tier(points, tiers)
         result.append({
-            "id": str(u["_id"]),
+            "id": uid,
             "first_name": u.get("first_name"), "last_name": u.get("last_name"),
             "email": u.get("email"), "phone": u.get("phone"),
             "created_at": u.get("created_at"), "orders_count": count,
+            "loyalty_points": points,
+            "loyalty_lifetime": int(u.get("loyalty_lifetime", 0)),
+            "tier": override or (tier.get("name") if tier else None),
+            "tier_override": override or None,
+            "referral_code": u.get("referral_code"),
+            "referred_by_id": u.get("referred_by"),
+            "referred_by_name": name_map.get(u.get("referred_by")) if u.get("referred_by") else None,
+            "referral_count": ref_counts.get(uid, 0),
         })
     return result
+
+
+@api.put("/customers/{customer_id}/loyalty")
+async def admin_update_customer_loyalty(customer_id: str, payload: dict, admin: dict = Depends(get_admin_user)):
+    if not ObjectId.is_valid(customer_id):
+        raise HTTPException(status_code=404, detail="Client introuvable")
+    user = await db.users.find_one({"_id": ObjectId(customer_id)})
+    if not user:
+        raise HTTPException(status_code=404, detail="Client introuvable")
+    sets, incs = {}, {}
+    if "set_points" in payload and payload["set_points"] is not None:
+        sets["loyalty_points"] = max(0, int(payload["set_points"]))
+    elif "points_delta" in payload and payload["points_delta"]:
+        delta = int(payload["points_delta"])
+        new_balance = max(0, int(user.get("loyalty_points", 0)) + delta)
+        sets["loyalty_points"] = new_balance
+        if delta > 0:
+            incs["loyalty_lifetime"] = delta
+    if "tier_override" in payload:
+        ov = payload["tier_override"]
+        sets["loyalty_tier_override"] = ov if ov and ov not in ("auto", "") else None
+    update = {}
+    if sets:
+        update["$set"] = sets
+    if incs:
+        update["$inc"] = incs
+    if update:
+        await db.users.update_one({"_id": ObjectId(customer_id)}, update)
+    u = await db.users.find_one({"_id": ObjectId(customer_id)})
+    s = await db.settings.find_one({"_id": "site"}) or {}
+    tier, _ = _loyalty_tier(int(u.get("loyalty_points", 0)), s.get("loyalty_tiers", []))
+    return {"id": customer_id, "loyalty_points": int(u.get("loyalty_points", 0)),
+            "tier": u.get("loyalty_tier_override") or (tier.get("name") if tier else None),
+            "tier_override": u.get("loyalty_tier_override") or None}
 
 
 @api.get("/customers/{customer_id}/orders")
@@ -1319,6 +1370,14 @@ async def create_order(data: OrderInput, request: Request):
     delivery = await compute_delivery(data.delivery_method, data.wilaya, data.commune, data.agency, subtotal)
     discount = await apply_promo(data.promo_code, subtotal)
     total = max(0, subtotal + delivery - discount)
+    # Apply e-gift card balance (partial payment)
+    giftcard_applied = 0
+    gc = None
+    if data.giftcard_code:
+        gc = await db.gift_cards.find_one({"code": data.giftcard_code.strip().upper(), "status": "active"})
+        if gc and float(gc.get("balance", 0)) > 0:
+            giftcard_applied = min(float(gc["balance"]), total)
+            total = max(0, total - giftcard_applied)
     user = None
     try:
         user = await get_current_user(request)
@@ -1330,6 +1389,8 @@ async def create_order(data: OrderInput, request: Request):
         "delivery": delivery,
         "discount": discount,
         "promo_code": data.promo_code.strip().upper() if data.promo_code else "",
+        "giftcard_code": data.giftcard_code.strip().upper() if data.giftcard_code else "",
+        "giftcard_applied": giftcard_applied,
         "total": total,
         "full_name": data.full_name,
         "phone": data.phone,
@@ -1348,6 +1409,24 @@ async def create_order(data: OrderInput, request: Request):
     }
     res = await db.orders.insert_one(order)
     order["_id"] = res.inserted_id
+    # deduct used e-gift card balance
+    if gc and giftcard_applied > 0:
+        new_balance = round(float(gc["balance"]) - giftcard_applied, 2)
+        await db.gift_cards.update_one({"_id": gc["_id"]},
+            {"$set": {"balance": new_balance, "status": "depleted" if new_balance <= 0 else "active"}})
+    # create purchased e-cards (pending until the order is confirmed by admin)
+    for i in data.items:
+        if i.ecard:
+            ec = i.ecard
+            await db.gift_cards.insert_one({
+                "code": _gc_code(), "type": "ecard",
+                "amount": float(i.price), "balance": float(i.price),
+                "status": "pending", "delivery": ec.get("delivery", "print"),
+                "recipient_email": (ec.get("recipient_email") or "").strip().lower() or None,
+                "message": ec.get("message", ""), "scheduled_date": ec.get("scheduled_date") or None,
+                "buyer_user_id": str(user["_id"]) if user else None,
+                "order_id": str(res.inserted_id), "created_at": now_utc().isoformat(),
+            })
     # single-use promo (loyalty reward): deactivate after use
     if data.promo_code:
         await db.promo_codes.update_one(
@@ -1401,6 +1480,16 @@ async def update_order_status(order_id: str, payload: dict, admin: dict = Depend
                                           {"$inc": {"loyalty_points": pts, "loyalty_lifetime": pts}})
             await db.orders.update_one({"_id": ObjectId(order_id)},
                                        {"$set": {"loyalty_credited": True, "loyalty_points_earned": pts}})
+    # E-cards: activate/schedule linked e-cards once the order is confirmed
+    confirmed = status not in ("En attente", "En attente de paiement BaridiMob", "Annulée")
+    if order and confirmed:
+        today = now_utc().date().isoformat()
+        pending = await db.gift_cards.find({"order_id": order_id, "status": "pending"}).to_list(50)
+        for card in pending:
+            if card.get("scheduled_date") and card["scheduled_date"] > today:
+                await db.gift_cards.update_one({"_id": card["_id"]}, {"$set": {"status": "scheduled"}})
+            else:
+                await _issue_ecard(card)
     doc = await db.orders.find_one({"_id": ObjectId(order_id)})
     return clean(doc)
 
@@ -1436,7 +1525,15 @@ async def loyalty_me(user: dict = Depends(get_current_user)):
     tiers = s.get("loyalty_tiers", [])
     lifetime = int(user.get("loyalty_lifetime", 0))
     points = int(user.get("loyalty_points", 0))
-    current, nxt = _loyalty_tier(lifetime, tiers)
+    # Status is based on the CURRENT points balance (spending can lower it)
+    current, nxt = _loyalty_tier(points, tiers)
+    override = user.get("loyalty_tier_override")
+    if override:
+        forced = next((t for t in tiers if t.get("name") == override), None)
+        if forced:
+            current = forced
+            idx = tiers.index(forced)
+            nxt = tiers[idx + 1] if idx + 1 < len(tiers) else None
     # ensure the user has a referral code (older accounts)
     ref_code = user.get("referral_code")
     if not ref_code:
@@ -1451,6 +1548,7 @@ async def loyalty_me(user: dict = Depends(get_current_user)):
         "lifetime": lifetime,
         "points_per_100da": s.get("loyalty_points_per_100da", 1),
         "tier": current,
+        "tier_override": override or None,
         "next_tier": nxt,
         "tiers": tiers,
         "rewards": [r for r in s.get("loyalty_rewards", []) if r.get("enabled", True)],
@@ -1552,6 +1650,87 @@ async def admin_delete_pack(pack_id: str, admin: dict = Depends(get_admin_user))
     if ObjectId.is_valid(pack_id):
         await db.gift_packs.delete_one({"_id": ObjectId(pack_id)})
     return {"ok": True}
+
+
+# ----------------------------------------------------------------------------
+# E-gift cards (multi-use balance, email or print, scheduled send)
+# ----------------------------------------------------------------------------
+def _gc_code():
+    import string
+    return "EC-" + "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
+
+
+def send_ecard_email(to: str, code: str, amount: float, message: str, sender: str = None):
+    api_key = os.environ.get("RESEND_API_KEY")
+    if not api_key or not to:
+        logger.warning("E-card email skipped (no key or recipient)")
+        return
+    try:
+        import resend
+        resend.api_key = api_key
+        sender = sender or os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+        msg_html = f'<p style="font-style:italic;color:#334155;background:#f0fdf4;padding:12px 16px;border-left:3px solid #059669;border-radius:6px">{message}</p>' if message else ""
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px;color:#0f172a">
+          <h2 style="color:#059669">Vous avez reçu une E-carte cadeau Pharma360 !</h2>
+          {msg_html}
+          <div style="background:linear-gradient(135deg,#059669,#065F46);color:#fff;border-radius:16px;padding:24px;text-align:center;margin:16px 0">
+            <div style="font-size:13px;opacity:.85">Montant</div>
+            <div style="font-size:32px;font-weight:800">{int(amount)} DA</div>
+            <div style="font-size:13px;opacity:.85;margin-top:12px">Code de la carte</div>
+            <div style="font-size:22px;font-weight:800;letter-spacing:2px">{code}</div>
+          </div>
+          <p style="font-size:13px;color:#64748b">Utilisez ce code lors du paiement sur pharma360. Utilisable en plusieurs fois jusqu'à épuisement du montant.</p>
+        </div>"""
+        resend.Emails.send({"from": sender, "to": [to], "subject": "Votre E-carte cadeau Pharma360", "html": html})
+    except Exception as e:
+        logger.error("send_ecard_email failed: %s", e)
+
+
+async def _issue_ecard(card: dict):
+    """Activate an e-card and send it by email if requested."""
+    updates = {"status": "active", "issued_at": now_utc().isoformat()}
+    await db.gift_cards.update_one({"_id": card["_id"]}, {"$set": updates})
+    if card.get("delivery") == "email" and card.get("recipient_email"):
+        s = await db.settings.find_one({"_id": "site"}) or {}
+        sender = s.get("sender_email") or os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+        await asyncio.to_thread(send_ecard_email, card["recipient_email"], card["code"],
+                                card["amount"], card.get("message", ""), sender)
+
+
+async def ecard_scheduler():
+    """Background loop: issue scheduled e-cards whose date has arrived."""
+    while True:
+        try:
+            today = now_utc().date().isoformat()
+            cards = await db.gift_cards.find({"status": "scheduled"}).to_list(200)
+            for c in cards:
+                if (c.get("scheduled_date") or "0000") <= today:
+                    await _issue_ecard(c)
+        except Exception as e:
+            logger.error("ecard_scheduler error: %s", e)
+        await asyncio.sleep(120)
+
+
+@api.post("/giftcard/validate")
+async def validate_giftcard(payload: dict):
+    code = (payload.get("code") or "").strip().upper()
+    card = await db.gift_cards.find_one({"code": code, "status": "active"})
+    if not card or float(card.get("balance", 0)) <= 0:
+        raise HTTPException(status_code=404, detail="E-carte invalide, inactive ou épuisée")
+    return {"code": code, "balance": float(card.get("balance", 0)), "amount": float(card.get("amount", 0))}
+
+
+@api.get("/account/giftcards")
+async def my_giftcards(user: dict = Depends(get_current_user)):
+    cards = await db.gift_cards.find({"buyer_user_id": str(user["_id"])}).sort("created_at", -1).to_list(100)
+    return [clean(c) for c in cards]
+
+
+@api.get("/admin/giftcards")
+async def admin_giftcards(admin: dict = Depends(get_admin_user)):
+    cards = await db.gift_cards.find({}).sort("created_at", -1).to_list(500)
+    return [clean(c) for c in cards]
 
 
 # ----------------------------------------------------------------------------
@@ -1684,9 +1863,13 @@ async def list_messages(admin: dict = Depends(get_admin_user)):
 # ----------------------------------------------------------------------------
 @api.get("/admin/stats")
 async def admin_stats(admin: dict = Depends(get_admin_user)):
-    agg = await db.orders.aggregate([{"$group": {"_id": None, "total": {"$sum": "$total"}, "count": {"$sum": 1}}}]).to_list(1)
-    revenue = agg[0]["total"] if agg else 0
-    orders_count = agg[0]["count"] if agg else 0
+    # Revenue counts ONLY delivered ("Livrée") orders — real money collected
+    rev_agg = await db.orders.aggregate([
+        {"$match": {"status": "Livrée"}},
+        {"$group": {"_id": None, "total": {"$sum": "$total"}}},
+    ]).to_list(1)
+    revenue = rev_agg[0]["total"] if rev_agg else 0
+    orders_count = await db.orders.count_documents({})
     settings = await db.settings.find_one({"_id": "site"}) or {}
     threshold = settings.get("low_stock_threshold", 5)
     return {
@@ -1698,6 +1881,72 @@ async def admin_stats(admin: dict = Depends(get_admin_user)):
         "customers": await db.users.count_documents({"role": "customer"}),
         "low_stock": await db.products.count_documents({"stock": {"$lte": threshold}}),
         "low_stock_threshold": threshold,
+    }
+
+
+@api.delete("/orders/{order_id}")
+async def delete_order(order_id: str, admin: dict = Depends(get_admin_user)):
+    if not ObjectId.is_valid(order_id):
+        raise HTTPException(status_code=404, detail="Commande introuvable")
+    await db.gift_cards.delete_many({"order_id": order_id})
+    res = await db.orders.delete_one({"_id": ObjectId(order_id)})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Commande introuvable")
+    return {"ok": True}
+
+
+@api.get("/admin/analytics")
+async def admin_analytics(period: str = "month", admin: dict = Depends(get_admin_user)):
+    now = now_utc()
+    cutoff_iso = None
+    if period == "day":
+        cutoff_iso = (now - timedelta(days=1)).isoformat()
+    elif period == "week":
+        cutoff_iso = (now - timedelta(days=7)).isoformat()
+    elif period == "month":
+        cutoff_iso = (now - timedelta(days=30)).isoformat()
+
+    order_q = {"status": "Livrée"}
+    if cutoff_iso:
+        order_q["created_at"] = {"$gte": cutoff_iso}
+    orders = await db.orders.find(order_q).to_list(5000)
+
+    revenue = sum(float(o.get("total", 0)) for o in orders)
+    orders_count = len(orders)
+    aov = round(revenue / orders_count, 2) if orders_count else 0
+
+    prod = {}
+    for o in orders:
+        for it in o.get("items", []):
+            pid = it.get("product_id") or it.get("name")
+            e = prod.setdefault(pid, {"product_id": it.get("product_id"), "name": it.get("name"), "qty": 0, "revenue": 0.0})
+            e["qty"] += int(it.get("quantity", 0))
+            e["revenue"] += float(it.get("price", 0)) * int(it.get("quantity", 0))
+    top_products = sorted(prod.values(), key=lambda x: x["qty"], reverse=True)[:20]
+
+    cust = {}
+    for o in orders:
+        uid = o.get("user_id") or o.get("phone") or o.get("full_name")
+        e = cust.setdefault(uid, {"name": o.get("full_name"), "phone": o.get("phone"), "orders": 0, "spent": 0.0})
+        e["orders"] += 1
+        e["spent"] += float(o.get("total", 0))
+    top_customers = sorted(cust.values(), key=lambda x: x["spent"], reverse=True)[:20]
+
+    total_customers = await db.users.count_documents({"role": "customer"})
+    if cutoff_iso:
+        new_customers = await db.users.count_documents({"role": "customer", "created_at": {"$gte": cutoff_iso}})
+    else:
+        new_customers = total_customers
+
+    return {
+        "period": period,
+        "revenue": revenue,
+        "orders": orders_count,
+        "aov": aov,
+        "total_customers": total_customers,
+        "new_customers": new_customers,
+        "top_products": top_products,
+        "top_customers": top_customers,
     }
 
 
@@ -1912,9 +2161,20 @@ DEFAULT_SETTINGS = {
     "loyalty_enabled": True,
     "loyalty_points_per_100da": 1,
     "loyalty_tiers": [
-        {"name": "Bronze", "min": 0},
-        {"name": "Argent", "min": 500},
-        {"name": "Or", "min": 1500},
+        {"name": "BRONZE", "min": 0, "perks": [
+            "Un cadeau Bronze à choisir pour tout achat",
+        ]},
+        {"name": "Silver", "min": 500, "perks": [
+            "Un cadeau Silver à choisir pour tout achat",
+            "Des offres exclusives réservées aux membres Silver",
+        ]},
+        {"name": "Gold", "min": 1500, "perks": [
+            "Un cadeau Gold à choisir",
+            "Carte cadeau de 10 000 DA",
+            "Des offres exclusives réservées aux membres Gold",
+            "Des journées Gold et invitations aux événements exclusifs",
+            "Une ou plusieurs livraisons standard offertes sans minimum d'achat",
+        ]},
     ],
     "loyalty_rewards": [
         {"id": "r1", "label": "Bon de 500 DA", "points": 500, "type": "fixed", "value": 500, "enabled": True},
@@ -1937,6 +2197,16 @@ DEFAULT_SETTINGS = {
         "Produits 100% Originaux & Authentiques",
         "Expédition Express sous 24h–48h",
     ],
+    "chat_quick_replies": [
+        "Bonjour 👋 Comment puis-je vous aider ?",
+        "Pour le suivi de votre commande, merci de m'indiquer votre numéro de commande.",
+        "Ce produit est bien disponible en stock ✅",
+        "La livraison se fait sous 24 à 48h dans toutes les wilayas.",
+        "Merci pour votre message, notre équipe revient vers vous rapidement.",
+    ],
+    "app_download_enabled": False,
+    "app_store_url": "",
+    "play_store_url": "",
 }
 
 
@@ -2141,6 +2411,22 @@ async def ensure_settings():
                 l["target"] = "/carte-cadeau"
         await db.settings.update_one({"_id": "site"}, {"$set": {"footer_news_links": news}})
         await db.meta.insert_one({"_id": "gifts_v1", "created_at": now_utc().isoformat()})
+    # one-time: rename loyalty tiers to English + attach default perks
+    if not await db.meta.find_one({"_id": "loyalty_v2"}):
+        rename = {"Bronze": "BRONZE", "Argent": "Silver", "Or": "Gold"}
+        default_perks = {
+            "BRONZE": ["Un cadeau Bronze à choisir pour tout achat"],
+            "Silver": ["Un cadeau Silver à choisir pour tout achat", "Des offres exclusives réservées aux membres Silver"],
+            "Gold": ["Un cadeau Gold à choisir", "Carte cadeau de 10 000 DA", "Des offres exclusives réservées aux membres Gold", "Des journées Gold et invitations aux événements exclusifs", "Une ou plusieurs livraisons standard offertes sans minimum d'achat"],
+        }
+        doc = await db.settings.find_one({"_id": "site"}) or {}
+        tiers = doc.get("loyalty_tiers") or []
+        for t in tiers:
+            t["name"] = rename.get(t.get("name"), t.get("name"))
+            if not t.get("perks"):
+                t["perks"] = default_perks.get(t["name"], [])
+        await db.settings.update_one({"_id": "site"}, {"$set": {"loyalty_tiers": tiers}})
+        await db.meta.insert_one({"_id": "loyalty_v2", "created_at": now_utc().isoformat()})
 
 
 @api.get("/settings")
@@ -2312,6 +2598,7 @@ async def startup():
     await ensure_settings()
     await ensure_cms_pages()
     await ensure_category_tree()
+    asyncio.create_task(ecard_scheduler())
     await ensure_wilayas()
     try:
         await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)

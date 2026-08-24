@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Package, MapPin, LogOut, Plus, Trash2, Heart, Gift } from "lucide-react";
+import { User, Package, MapPin, LogOut, Plus, Trash2, Heart, Gift, Eye, EyeOff, Crown } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatDA, formatApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -12,12 +12,10 @@ import { LoyaltyContent } from "@/pages/Loyalty";
 
 function AuthForm() {
   const { login, register } = useAuth();
-  const navigate = useNavigate();
   const [mode, setMode] = useState("login");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const [f, setF] = useState({ first_name: "", last_name: "", identifier: "", email: "", phone: "", password: "", referral_code: "" });
-  const [resetLink, setResetLink] = useState("");
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
   const submit = async (e) => {
@@ -29,12 +27,8 @@ function AuthForm() {
         toast.success("Connexion réussie");
       } else if (mode === "forgot") {
         const { data } = await api.post("/auth/forgot-password", { email: f.email });
-        if (data.reset_link) {
-          setResetLink(data.reset_link);
-          toast.success("Lien de réinitialisation prêt");
-        } else {
-          toast.success(data.message || "Aucun compte trouvé pour cet email.");
-        }
+        toast.success(data.message || "Si un compte existe, un email vous a été envoyé.");
+        setMode("login");
       } else {
         await register({ first_name: f.first_name, last_name: f.last_name, email: f.email || null, phone: f.phone || null, password: f.password, referral_code: f.referral_code || null });
         toast.success("Compte créé avec succès");
@@ -72,18 +66,8 @@ function AuthForm() {
             </>
           ) : mode === "forgot" ? (
             <>
-              <p className="text-sm text-slate-500">Saisissez votre email : vous obtiendrez un lien pour créer un nouveau mot de passe.</p>
+              <p className="text-sm text-slate-500">Saisissez votre email : vous recevrez un lien par email pour créer un nouveau mot de passe.</p>
               <Input label="Email" type="email" value={f.email} onChange={set("email")} required testid="forgot-email" />
-              {resetLink && (
-                <div className="p-4 rounded-xl bg-mint-50 border border-mint-200 space-y-3" data-testid="reset-link-box">
-                  <p className="text-sm text-slate-600">Votre lien est prêt. Cliquez pour définir un nouveau mot de passe :</p>
-                  <button type="button" onClick={() => navigate(resetLink.replace(/^https?:\/\/[^/]+/, ""))}
-                    data-testid="reset-link-btn"
-                    className="w-full py-2.5 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold text-sm">
-                    Créer un nouveau mot de passe
-                  </button>
-                </div>
-              )}
             </>
           ) : (
             <>
@@ -103,11 +87,21 @@ function AuthForm() {
   );
 }
 
-function Input({ label, testid, ...props }) {
+function Input({ label, testid, type, ...props }) {
+  const [show, setShow] = useState(false);
+  const isPassword = type === "password";
   return (
     <div>
       <label className="block text-sm font-medium text-slate-600 mb-1.5">{label}</label>
-      <input {...props} data-testid={testid} className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
+      <div className="relative">
+        <input {...props} type={isPassword ? (show ? "text" : "password") : type} data-testid={testid} className={`w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500 ${isPassword ? "pr-11" : ""}`} />
+        {isPassword && (
+          <button type="button" onClick={() => setShow((s) => !s)} data-testid={`${testid}-toggle`} aria-label={show ? "Masquer" : "Afficher"}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-mint-600">
+            {show ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -131,6 +125,13 @@ function Dashboard() {
     api.get("/favorites").then((r) => setFavorites(r.data)).catch(() => {});
   }, [favIds]);
 
+  const [ecards, setEcards] = useState([]);
+  useEffect(() => { api.get("/account/giftcards").then((r) => setEcards(r.data)).catch(() => {}); }, []);
+
+  const [tier, setTier] = useState(null);
+  useEffect(() => { api.get("/loyalty/me").then((r) => setTier(r.data?.tier?.name || null)).catch(() => {}); }, []);
+  const tierStyle = { BRONZE: "bg-amber-100 text-amber-800 border-amber-300", Silver: "bg-slate-100 text-slate-600 border-slate-300", Gold: "bg-yellow-100 text-yellow-700 border-yellow-400" };
+
   const saveAddr = async () => {
     if (!addr.full_name || !addr.phone || !addr.street) { toast.error("Champs requis manquants"); return; }
     const { data } = await api.post("/account/addresses", addr);
@@ -148,16 +149,21 @@ function Dashboard() {
           <div>
             <h1 className="font-display font-extrabold text-xl sm:text-2xl">Bonjour, {user.first_name}</h1>
             <p className="text-slate-500 text-sm">{user.email || user.phone}</p>
+            {tier && (
+              <span data-testid="profile-tier-badge" className={`inline-flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full text-xs font-bold border ${tierStyle[tier] || tierStyle.BRONZE}`}>
+                <Crown className="w-3.5 h-3.5" /> Statut {tier}
+              </span>
+            )}
           </div>
         </div>
         <button onClick={logout} data-testid="logout-button" className="flex items-center gap-2 text-sm text-slate-500 hover:text-red-500"><LogOut className="w-4 h-4" /> Déconnexion</button>
       </div>
 
-      <div className="flex gap-2 mb-6">
-        <button onClick={() => setTab("orders")} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${tab === "orders" ? "bg-mint-600 text-white" : "bg-white border border-mint-200"}`} data-testid="tab-orders"><Package className="w-4 h-4" /> Mes commandes</button>
-        <button onClick={() => setTab("addresses")} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${tab === "addresses" ? "bg-mint-600 text-white" : "bg-white border border-mint-200"}`} data-testid="tab-addresses"><MapPin className="w-4 h-4" /> Mes adresses</button>
-        <button onClick={() => setTab("favorites")} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${tab === "favorites" ? "bg-mint-600 text-white" : "bg-white border border-mint-200"}`} data-testid="tab-favorites"><Heart className="w-4 h-4" /> Mes favoris</button>
-        <button onClick={() => setTab("loyalty")} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${tab === "loyalty" ? "bg-mint-600 text-white" : "bg-white border border-mint-200"}`} data-testid="tab-loyalty"><Gift className="w-4 h-4" /> Fidélité</button>
+      <div className="flex flex-wrap gap-2 mb-6">
+        <button onClick={() => setTab("orders")} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold shrink-0 whitespace-nowrap ${tab === "orders" ? "bg-mint-600 text-white" : "bg-white border border-mint-200"}`} data-testid="tab-orders"><Package className="w-4 h-4" /> Mes commandes</button>
+        <button onClick={() => setTab("addresses")} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold shrink-0 whitespace-nowrap ${tab === "addresses" ? "bg-mint-600 text-white" : "bg-white border border-mint-200"}`} data-testid="tab-addresses"><MapPin className="w-4 h-4" /> Mes adresses</button>
+        <button onClick={() => setTab("favorites")} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold shrink-0 whitespace-nowrap ${tab === "favorites" ? "bg-mint-600 text-white" : "bg-white border border-mint-200"}`} data-testid="tab-favorites"><Heart className="w-4 h-4" /> Mes favoris</button>
+        <button onClick={() => setTab("loyalty")} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold shrink-0 whitespace-nowrap ${tab === "loyalty" ? "bg-mint-600 text-white" : "bg-white border border-mint-200"}`} data-testid="tab-loyalty"><Gift className="w-4 h-4" /> Fidélité</button>
       </div>
 
       {tab === "orders" && (
@@ -227,6 +233,29 @@ function Dashboard() {
       )}
 
       {tab === "loyalty" && <div data-testid="loyalty-panel"><LoyaltyContent /></div>}
+
+      {ecards.length > 0 && (
+        <div className="mt-10" data-testid="my-ecards">
+          <h3 className="font-display font-bold text-lg mb-3 flex items-center gap-2"><Gift className="w-5 h-5 text-mint-600" /> Mes cartes cadeaux</h3>
+          <div className="grid sm:grid-cols-2 gap-4">
+            {ecards.map((c) => (
+              <div key={c.id} className="rounded-2xl bg-gradient-to-br from-mint-600 to-mint-800 text-white p-5" data-testid={`ecard-${c.id}`}>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="text-xs text-mint-100">Solde restant</div>
+                    <div className="font-display font-extrabold text-2xl">{formatDA(c.balance)}</div>
+                    <div className="text-xs text-mint-100 mt-0.5">sur {formatDA(c.amount)}</div>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/20">{c.status === "active" ? "Active" : c.status === "scheduled" ? "Programmée" : c.status === "pending" ? "En attente" : c.status === "depleted" ? "Épuisée" : c.status}</span>
+                </div>
+                <div className="mt-3 font-mono font-bold tracking-wider bg-white/15 rounded-lg px-3 py-2 text-center">{c.code}</div>
+                {c.message && <p className="text-xs text-mint-100 mt-2 italic">« {c.message} »</p>}
+                <button onClick={() => window.print()} data-testid={`ecard-print-${c.id}`} className="mt-3 w-full py-2 rounded-full bg-white/20 hover:bg-white/30 text-sm font-semibold">Imprimer</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

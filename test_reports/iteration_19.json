@@ -1,0 +1,27 @@
+{
+  "summary": "End-to-end validation of Phase 3 (E-carte cadeau) and Phase 4 (Chat widget avatar) on the public preview URL. All 5 requested flows PASS. (1) Chat: floating button shows conseillère avatar (chat-open-btn) with desktop label 'Besoin d'aide ? Cliquez ici' (chat-help-label); clicking opens chat-window with the same avatar in the header; guest start (chat-name + chat-start-btn) + text send (chat-input + chat-send-btn) works, no photo upload UI is present. (2) /carte-cadeau: mode toggle physical/ecard works, e-card form appears with amount buttons, delivery email/print buttons, recipient email field (only visible in email mode), date input (default today, min today) and message textarea; clicking ecard-order-btn navigates to /commande and cart contains 'E-carte cadeau — 2000 DA' line. (3) Full purchase as a fresh CLIENT (registered via UI): order was created successfully in pickup mode (COD 'En attente'); admin logged in and set admin-order-status-<id> to 'Confirmée'; e-card was auto-activated. (4) Redemption UI: on /commande, giftcard-input + giftcard-apply exist; invalid code triggers Sonner toast 'E-carte invalide, inactive ou épuisée'; valid ACTIVE code (EC-5LCCGAJU) applies balance: summary-giftcard line '- 2 000 DA' appears and checkout-total drops from 4 350 DA to 2 350 DA (non-negative confirmed). (5) Admin /admin → onglet Cadeaux shows admin-ecards-table with the new row 'EC-5LCCGAJU · 2 000 DA · 2 000 DA · Impression · 2026-08-24 · active'; on /compte, section my-ecards displays ecard-<id> card with code, balance, 'Active' badge, custom message, and ecard-print-<id> Imprimer button.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Checkout /commande", "issues": ["Right after clicking ecard-order-btn (or any addItem) the CartDrawer opens on top of the checkout page and its backdrop intercepts pointer events until user clicks cart-close or Passer la commande — real users won't be blocked (they see the drawer), but purely programmatic 'auto-fill' testing needs to close it. Consider not opening the CartDrawer when navigate() is already sending the user to /commande, or auto-close on route change."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Minor UX) In CartContext, avoid opening the drawer when addItem is followed by an immediate navigation to /commande (e.g. from GiftCard.orderPhysical/orderEcard), or auto-close the drawer on location change."
+  ],
+  "critical_code_review_comments": [
+    "Admin.jsx is very large (>1200 lines) — GiftAdminPanel and other panels should be extracted to separate files for readability/testability.",
+    "Cart drawer overlay covering /commande on landing is only a testability nuisance today, but if any product page ever auto-adds without navigating, the whole page will feel locked; consider unifying add-item UX (either drawer OR navigate)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not re-tested (already validated by main agent via curl)", "frontend": "100% on the 5 requested flows"},
+  "test_credentials": "Admin: pharmacie360benak@gmail.com / Aminetarek1992*. Test client created: tst_ec_1787591040@t.com / TestPass1234! (owns active e-card EC-5LCCGAJU — 2000 DA remaining after this test, since redemption was NOT submitted, only applied in UI).",
+  "seed_data_creation": "Created via UI: 1 client account (tst_ec_1787591040@t.com), 1 order id 6a8c798792ab88d8bf384230 confirmed to 'Confirmée', which minted 1 active e-card EC-5LCCGAJU (2000 DA, Impression, date 2026-08-24). No cleanup performed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Chat widget + E-carte v1 (physical/e-card modes, email/print delivery, scheduled_date, message), admin ecards table, client my-ecards section, and checkout redemption UI (giftcard-input/apply, summary-giftcard, checkout-total non-negative) are all working end-to-end via the preview URL. Backend endpoints already validated by main agent. When testing checkout after adding an item, click cart-close first because CartDrawer opens automatically.",
+  "rca of the issue": "N/A — no defects found."
+}

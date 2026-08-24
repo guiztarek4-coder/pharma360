@@ -117,6 +117,27 @@ export default function Footer() {
           </div>
         </div>
 
+        {settings.app_download_enabled && (
+          <div className="py-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-5" data-testid="footer-app-download">
+            <div className="text-center sm:text-left">
+              <h4 className="font-display font-bold text-white text-lg">Téléchargez notre application Pharma360</h4>
+              <p className="text-sm text-slate-400 mt-1">Commandez encore plus vite depuis votre mobile.</p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <a href={settings.app_store_url || "#"} target="_blank" rel="noopener noreferrer" data-testid="app-store-btn"
+                className="flex items-center gap-3 px-5 py-2.5 rounded-xl bg-white text-slate-900 hover:bg-slate-100 transition-colors">
+                <svg viewBox="0 0 24 24" className="w-7 h-7" fill="currentColor"><path d="M16.5 1.9c0 1.1-.4 2.1-1.2 3-.9.9-1.9 1.5-3 1.4-.1-1.1.4-2.2 1.2-3 .8-.9 2-1.5 3-1.4zM20.6 17c-.5 1.2-.8 1.7-1.5 2.8-1 1.5-2.4 3.4-4.1 3.4-1.5 0-1.9-1-4-1-2 0-2.5 1-4 1-1.7 0-3-1.7-4-3.2-2.8-4.3-3.1-9.3-1.4-12 1.2-1.9 3.1-3 4.9-3 1.8 0 3 1 4.5 1 1.5 0 2.3-1 4.4-1 1.6 0 3.3.9 4.5 2.4-4 2.2-3.3 7.9.2 9.6z"/></svg>
+                <span className="text-left"><span className="block text-[10px] leading-none">Télécharger dans</span><span className="block font-display font-bold text-base leading-tight">App Store</span></span>
+              </a>
+              <a href={settings.play_store_url || "#"} target="_blank" rel="noopener noreferrer" data-testid="play-store-btn"
+                className="flex items-center gap-3 px-5 py-2.5 rounded-xl bg-white text-slate-900 hover:bg-slate-100 transition-colors">
+                <svg viewBox="0 0 24 24" className="w-7 h-7"><path fill="#00D0FF" d="M3.6 2.3c-.3.3-.5.7-.5 1.3v16.8c0 .6.2 1 .5 1.3l.1.1L13 12.6v-.2L3.7 2.2z"/><path fill="#00F076" d="M16.3 15.9l-3.3-3.3v-.2l3.3-3.3.1.1 3.9 2.2c1.1.6 1.1 1.7 0 2.4l-3.9 2.2z"/><path fill="#FF3A44" d="M16.4 15.8L13 12.4 3.6 21.8c.4.4 1 .4 1.7.1l11.1-6.1"/><path fill="#FFC400" d="M16.4 9L5.3 2.9c-.7-.4-1.3-.3-1.7.1L13 12.4z"/></svg>
+                <span className="text-left"><span className="block text-[10px] leading-none">Disponible sur</span><span className="block font-display font-bold text-base leading-tight">Google Play</span></span>
+              </a>
+            </div>
+          </div>
+        )}
+
         <div className="py-5 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
           <p>© {new Date().getFullYear()} {settings.brand_name}. Tous droits réservés.</p>
           <p>Paiement à la livraison · BaridiMob</p>

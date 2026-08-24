@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Truck, CreditCard, ShoppingBag, Store, MapPin, Tag, Check, MessageCircle, ShieldCheck, LogIn, User } from "lucide-react";
+import { Truck, CreditCard, ShoppingBag, Store, MapPin, Tag, Check, MessageCircle, ShieldCheck, LogIn, User, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
@@ -17,6 +17,8 @@ export default function Checkout() {
   const [submitting, setSubmitting] = useState(false);
   const [promoInput, setPromoInput] = useState("");
   const [promo, setPromo] = useState(null);
+  const [giftcardInput, setGiftcardInput] = useState("");
+  const [giftcard, setGiftcard] = useState(null);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [notRobot, setNotRobot] = useState(false);
   const [wilayas, setWilayas] = useState([]);
@@ -25,7 +27,7 @@ export default function Checkout() {
   const [loggingIn, setLoggingIn] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotLink, setForgotLink] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [form, setForm] = useState({
     full_name: user ? `${user.first_name} ${user.last_name}` : "",
     phone: user?.phone || "",
@@ -70,7 +72,9 @@ export default function Checkout() {
     return (currentWilaya.base_fee || 0) + (c ? c.fee : 0);
   })();
   const discount = promo ? promo.discount : 0;
-  const grandTotal = Math.max(0, total + deliveryFee - discount);
+  const afterDiscount = Math.max(0, total + deliveryFee - discount);
+  const giftcardApplied = giftcard ? Math.min(giftcard.balance, afterDiscount) : 0;
+  const grandTotal = Math.max(0, afterDiscount - giftcardApplied);
 
   const doQuickLogin = async (e) => {
     e.preventDefault();
@@ -88,12 +92,8 @@ export default function Checkout() {
     e.preventDefault();
     try {
       const { data } = await api.post("/auth/forgot-password", { email: forgotEmail });
-      if (data.reset_link) {
-        setForgotLink(data.reset_link);
-        toast.success("Lien de réinitialisation prêt");
-      } else {
-        toast.success(data.message || "Aucun compte trouvé pour cet email.");
-      }
+      toast.success(data.message || "Si un compte existe, un email vous a été envoyé.");
+      setShowForgot(false); setForgotEmail("");
     } catch (err) { toast.error(formatApiError(err.response?.data?.detail)); }
   };
 
@@ -105,6 +105,18 @@ export default function Checkout() {
       toast.success(`Code appliqué : -${formatDA(data.discount)}`);
     } catch (err) {
       setPromo(null);
+      toast.error(formatApiError(err.response?.data?.detail));
+    }
+  };
+
+  const applyGiftcard = async () => {
+    if (!giftcardInput.trim()) return;
+    try {
+      const { data } = await api.post("/giftcard/validate", { code: giftcardInput });
+      setGiftcard(data);
+      toast.success(`E-carte appliquée · solde ${formatDA(data.balance)}`);
+    } catch (err) {
+      setGiftcard(null);
       toast.error(formatApiError(err.response?.data?.detail));
     }
   };
@@ -132,11 +144,12 @@ export default function Checkout() {
     setSubmitting(true);
     try {
       const { data } = await api.post("/orders", {
-        items: items.map((i) => ({ product_id: i.product_id, name: i.name, price: i.price, quantity: i.quantity, image: i.image })),
+        items: items.map((i) => ({ product_id: i.product_id, name: i.name, price: i.price, quantity: i.quantity, image: i.image, ...(i.ecard ? { ecard: i.ecard } : {}) })),
         ...form,
         payment_method: payment,
         delivery_method: deliveryMethod,
         promo_code: promo ? promo.code : "",
+        giftcard_code: giftcard ? giftcard.code : "",
       });
       clear();
       if (payment === "baridimob") {
@@ -176,24 +189,21 @@ export default function Checkout() {
               ) : showForgot ? (
                 <div className="space-y-3">
                   <p className="text-sm font-semibold text-slate-dark">Mot de passe oublié</p>
+                  <p className="text-xs text-slate-500">Saisissez votre email : vous recevrez un lien par email pour réinitialiser votre mot de passe.</p>
                   <input type="email" required value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="Votre email" data-testid="checkout-forgot-email" className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
-                  {forgotLink ? (
-                    <div className="p-3 rounded-xl bg-white border border-mint-200 space-y-2" data-testid="checkout-reset-link-box">
-                      <p className="text-sm text-slate-600">Votre lien est prêt :</p>
-                      <a href={forgotLink} data-testid="checkout-reset-link-btn" className="inline-block px-5 py-2 rounded-full bg-mint-600 text-white font-semibold text-sm">Créer un nouveau mot de passe</a>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button type="button" onClick={doForgot} data-testid="checkout-forgot-submit" className="px-5 py-2 rounded-full bg-mint-600 text-white font-semibold text-sm">Obtenir le lien</button>
-                      <button type="button" onClick={() => { setShowForgot(false); setForgotLink(""); }} className="text-sm text-slate-500">Retour</button>
-                    </div>
-                  )}
+                  <div className="flex gap-2">
+                    <button type="button" onClick={doForgot} data-testid="checkout-forgot-submit" className="px-5 py-2 rounded-full bg-mint-600 text-white font-semibold text-sm">Envoyer le lien</button>
+                    <button type="button" onClick={() => setShowForgot(false)} className="text-sm text-slate-500">Retour</button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <p className="text-sm font-semibold text-slate-dark flex items-center gap-2"><User className="w-4 h-4 text-mint-600" /> Connexion</p>
                   <input value={loginData.identifier} onChange={(e) => setLoginData({ ...loginData, identifier: e.target.value })} placeholder="Email ou téléphone" data-testid="checkout-login-email" className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
-                  <input type="password" value={loginData.password} onChange={(e) => setLoginData({ ...loginData, password: e.target.value })} placeholder="Mot de passe" data-testid="checkout-login-password" className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
+                  <div className="relative">
+                    <input type={showPw ? "text" : "password"} value={loginData.password} onChange={(e) => setLoginData({ ...loginData, password: e.target.value })} placeholder="Mot de passe" data-testid="checkout-login-password" className="w-full px-4 py-2.5 pr-11 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
+                    <button type="button" onClick={() => setShowPw((s) => !s)} data-testid="checkout-login-password-toggle" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-mint-600">{showPw ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}</button>
+                  </div>
                   <div className="flex items-center gap-3 flex-wrap">
                     <button type="button" onClick={doQuickLogin} disabled={loggingIn} data-testid="checkout-login-submit" className="px-5 py-2 rounded-full bg-mint-600 text-white font-semibold text-sm disabled:opacity-60">{loggingIn ? "…" : "Se connecter"}</button>
                     <button type="button" onClick={() => setShowForgot(true)} data-testid="checkout-forgot-toggle" className="text-sm text-mint-700 underline">Mot de passe oublié ?</button>
@@ -337,12 +347,20 @@ export default function Checkout() {
                 <button type="button" onClick={applyPromo} data-testid="promo-apply" className="px-4 py-2 rounded-xl bg-slate-dark text-white text-sm font-semibold">OK</button>
               </div>
               {promo && <div className="text-xs text-mint-700 mt-1.5 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Code {promo.code} appliqué</div>}
+              <label className="block text-sm font-medium text-slate-600 mb-1.5 mt-3 flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5" /> E-carte cadeau</label>
+              <div className="flex gap-2">
+                <input value={giftcardInput} onChange={(e) => setGiftcardInput(e.target.value)} placeholder="Ex : EC-XXXXXXXX" data-testid="giftcard-input"
+                  className="flex-1 px-3 py-2 rounded-xl border border-mint-200 text-sm outline-none focus:ring-2 focus:ring-mint-500 uppercase" />
+                <button type="button" onClick={applyGiftcard} data-testid="giftcard-apply" className="px-4 py-2 rounded-xl bg-slate-dark text-white text-sm font-semibold">OK</button>
+              </div>
+              {giftcard && <div className="text-xs text-mint-700 mt-1.5 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> E-carte {giftcard.code} · solde {formatDA(giftcard.balance)}</div>}
             </div>
 
             <div className="space-y-2 text-sm border-t border-mint-100 pt-4">
               <div className="flex justify-between"><span className="text-slate-500">Sous-total</span><span data-testid="summary-subtotal">{formatDA(total)}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Livraison</span><span data-testid="summary-delivery">{deliveryFee === 0 ? "Gratuit" : formatDA(deliveryFee)}</span></div>
               {discount > 0 && <div className="flex justify-between text-mint-700"><span>Remise</span><span data-testid="summary-discount">- {formatDA(discount)}</span></div>}
+              {giftcardApplied > 0 && <div className="flex justify-between text-mint-700"><span>E-carte cadeau</span><span data-testid="summary-giftcard">- {formatDA(giftcardApplied)}</span></div>}
               <div className="flex justify-between font-display font-extrabold text-lg pt-2"><span>Total</span><span className="text-mint-700" data-testid="checkout-total">{formatDA(grandTotal)}</span></div>
             </div>
             <button type="submit" disabled={submitting || !acceptTerms || !notRobot} data-testid="checkout-submit"

@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { useEffect } from "react";
 import { Toaster } from "sonner";
 import "@/index.css";
 import { AuthProvider } from "@/context/AuthContext";
@@ -33,6 +34,7 @@ import Admin from "@/pages/Admin";
 
 function Shell({ children }) {
   const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "auto" }); }, [pathname]);
   const isAdmin = pathname.startsWith("/admin");
   if (isAdmin) return <>{children}</>;
   return (

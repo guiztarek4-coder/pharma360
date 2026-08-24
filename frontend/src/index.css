@@ -78,6 +78,30 @@ h1, h2, h3, h4, .font-display {
         --mint-800: #1E40AF; --mint-900: #1E3A8A;
         --primary: 217 91% 60%; --ring: 217 91% 60%;
     }
+    .theme-rose {
+        --mint-50: #FDF2F6; --mint-100: #FCE7EF; --mint-200: #FBCFE0; --mint-300: #F9A8C9;
+        --mint-400: #F472AC; --mint-500: #EC4899; --mint-600: #DB2777; --mint-700: #BE185D;
+        --mint-800: #9D174D; --mint-900: #831843;
+        --primary: 330 81% 60%; --ring: 330 81% 60%;
+    }
+    .theme-mauve {
+        --mint-50: #F6F4FB; --mint-100: #EDE9F6; --mint-200: #DDD6F3; --mint-300: #C4B5E8;
+        --mint-400: #A78BDB; --mint-500: #8B5CF6; --mint-600: #7C3AED; --mint-700: #6D28D9;
+        --mint-800: #5B21B6; --mint-900: #4C1D95;
+        --primary: 262 83% 58%; --ring: 262 83% 58%;
+    }
+    .theme-gold {
+        --mint-50: #FBF7ED; --mint-100: #F7EFD6; --mint-200: #EFDCA6; --mint-300: #E6C670;
+        --mint-400: #D9AC43; --mint-500: #C79626; --mint-600: #B07D1C; --mint-700: #926318;
+        --mint-800: #784F18; --mint-900: #654218;
+        --primary: 40 74% 40%; --ring: 40 74% 40%;
+    }
+    .theme-noir {
+        --mint-50: #F4F4F5; --mint-100: #E4E4E7; --mint-200: #D4D4D8; --mint-300: #A1A1AA;
+        --mint-400: #71717A; --mint-500: #52525B; --mint-600: #27272A; --mint-700: #18181B;
+        --mint-800: #111113; --mint-900: #09090B;
+        --primary: 240 6% 15%; --ring: 240 6% 15%;
+    }
 }
 
 @layer base {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ShieldCheck, CheckCircle } from "lucide-react";
+import { ShieldCheck, CheckCircle, Eye, EyeOff } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 
 export default function ResetPassword() {
@@ -12,6 +12,7 @@ export default function ResetPassword() {
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [show, setShow] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -46,11 +47,14 @@ export default function ResetPassword() {
             <form onSubmit={submit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1.5">Nouveau mot de passe</label>
-                <input type="password" value={pwd} onChange={(e) => setPwd(e.target.value)} required data-testid="reset-password-input" className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
+                <div className="relative">
+                  <input type={show ? "text" : "password"} value={pwd} onChange={(e) => setPwd(e.target.value)} required data-testid="reset-password-input" className="w-full px-4 py-2.5 pr-11 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
+                  <button type="button" onClick={() => setShow((s) => !s)} data-testid="reset-password-toggle" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-mint-600">{show ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}</button>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1.5">Confirmer le mot de passe</label>
-                <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required data-testid="reset-password-confirm" className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
+                <input type={show ? "text" : "password"} value={confirm} onChange={(e) => setConfirm(e.target.value)} required data-testid="reset-password-confirm" className="w-full px-4 py-2.5 rounded-xl border border-mint-200 outline-none focus:ring-2 focus:ring-mint-500" />
               </div>
               <button type="submit" disabled={loading} data-testid="reset-password-submit" className="w-full py-3 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold disabled:opacity-50">{loading ? "…" : "Réinitialiser"}</button>
             </form>

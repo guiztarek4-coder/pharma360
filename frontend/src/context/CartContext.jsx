@@ -37,6 +37,7 @@ export const CartProvider = ({ children }) => {
         image: (product.images && product.images[0]) || null,
         quantity,
         stock: product.stock,
+        ...(product.ecard ? { ecard: product.ecard } : {}),
       }];
     });
     setLastAddedId(product.id);

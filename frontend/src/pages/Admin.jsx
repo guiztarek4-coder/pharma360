@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { LayoutDashboard, Package, ShoppingBag, Tag, FileText, LogOut, Plus, Pencil, Trash2, X, Upload, TrendingUp, Users, Leaf, Settings, FolderTree, Ticket, Bell, Image as ImageIcon, UserCog, ChevronRight, GripVertical, Download, FileSpreadsheet, AlertCircle, AlertTriangle, Truck, MapPin, Compass, PanelBottom, ExternalLink, Gift, MessageCircle, Send, Sparkles } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Tag, FileText, LogOut, Plus, Pencil, Trash2, X, Upload, TrendingUp, Users, Leaf, Settings, FolderTree, Ticket, Bell, Image as ImageIcon, UserCog, ChevronRight, GripVertical, Download, FileSpreadsheet, AlertCircle, AlertTriangle, Truck, MapPin, Compass, PanelBottom, ExternalLink, Gift, MessageCircle, Send, Sparkles, Eye, EyeOff, BarChart3, Crown } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -9,6 +9,15 @@ import { WILAYAS } from "@/lib/site";
 
 const inp = "w-full px-3 py-2 rounded-xl border border-mint-200 text-sm outline-none focus:ring-2 focus:ring-mint-500";
 const L = ({ label, children }) => (<div><label className="block text-xs font-medium text-slate-500 mb-1">{label}</label>{children}</div>);
+const PwInput = ({ testid, ...props }) => {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <input {...props} type={show ? "text" : "password"} data-testid={testid} className={`${inp} pr-10`} />
+      <button type="button" onClick={() => setShow((s) => !s)} data-testid={testid ? `${testid}-toggle` : undefined} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-mint-600">{show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
+    </div>
+  );
+};
 
 function AdminLogin() {
   const { login } = useAuth();
@@ -26,7 +35,7 @@ function AdminLogin() {
         {err && <div className="mb-4 p-3 rounded-xl bg-red-50 text-red-600 text-sm">{err}</div>}
         <form onSubmit={submit} className="space-y-4">
           <input placeholder="Email admin" value={f.identifier} onChange={(e) => setF({ ...f, identifier: e.target.value })} data-testid="admin-login-email" className={inp} />
-          <input type="password" placeholder="Mot de passe" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} data-testid="admin-login-password" className={inp} />
+          <PwInput placeholder="Mot de passe" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} testid="admin-login-password" />
           <button data-testid="admin-login-submit" className="w-full py-3 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold">Se connecter</button>
         </form>
       </div>
@@ -230,12 +239,14 @@ function Dashboard() {
 
   const delProduct = async (id) => { await api.delete(`/products/${id}`); loadAll(); toast.success("Supprimé"); };
   const setStatus = async (id, status) => { await api.put(`/orders/${id}/status`, { status }); loadAll(); };
+  const delOrder = async (id) => { if (!window.confirm("Supprimer définitivement cette commande ? Elle sera retirée du chiffre d'affaires et des statistiques.")) return; await api.delete(`/orders/${id}`); loadAll(); toast.success("Commande supprimée"); };
   const delBrand = async (id) => { await api.delete(`/brands/${id}`); loadAll(); };
   const delBlog = async (id) => { await api.delete(`/blog/${id}`); loadAll(); };
   const openTab = (t) => { setTab(t); if (t === "notifications" && notifs.unread) api.post("/notifications/read").then(() => api.get("/notifications").then((r) => setNotifs(r.data))); };
 
   const tabs = [
     { id: "stats", label: "Tableau de bord", icon: LayoutDashboard },
+    { id: "analytics", label: "Statistiques", icon: BarChart3 },
     { id: "orders", label: "Commandes", icon: ShoppingBag },
     { id: "products", label: "Produits", icon: Package },
     { id: "customers", label: "Clients", icon: Users },
@@ -276,7 +287,7 @@ function Dashboard() {
 
         {tab === "stats" && stats && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[[TrendingUp, "Chiffre d'affaires", formatDA(stats.revenue)], [ShoppingBag, "Commandes", stats.orders], [Package, "Produits", stats.products], [Users, "Clients", stats.customers], [ShoppingBag, "En attente", stats.pending_orders], [Tag, "Marques", stats.brands]].map(([Icon, label, val], i) => (
+            {[[TrendingUp, "Chiffre d'affaires (livré)", formatDA(stats.revenue)], [ShoppingBag, "Commandes", stats.orders], [Package, "Produits", stats.products], [Users, "Clients", stats.customers], [ShoppingBag, "En attente", stats.pending_orders], [Tag, "Marques", stats.brands]].map(([Icon, label, val], i) => (
               <div key={i} className="bg-white rounded-2xl border border-slate-200/80 p-5" data-testid={`stat-${i}`}>
                 <Icon className="w-5 h-5 text-mint-600 mb-3" />
                 <div className="font-display font-extrabold text-2xl">{val}</div>
@@ -332,6 +343,7 @@ function Dashboard() {
           );
         })()}
 
+        {tab === "analytics" && <AnalyticsPanel />}
         {tab === "orders" && (
           <div className="space-y-3">
             {orders.length === 0 && <p className="text-slate-400 text-center py-12">Aucune commande.</p>}
@@ -343,17 +355,18 @@ function Dashboard() {
                 </div>
                 <div className="mt-3 text-sm text-slate-600">{o.items.map((i) => `${i.quantity}× ${i.name}`).join(", ")}</div>
                 {o.promo_code ? <div className="text-xs text-mint-700 mt-1">Code promo : {o.promo_code} (-{formatDA(o.discount||0)})</div> : null}
-                <div className="mt-3">
+                <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
                   <select value={o.status} onChange={(e) => setStatus(o.id, e.target.value)} data-testid={`admin-order-status-${o.id}`} className="px-3 py-1.5 rounded-full border border-mint-200 text-sm bg-white">
                     {["En attente", "Confirmée", "Expédiée", "Livrée", "Annulée"].map((s) => <option key={s}>{s}</option>)}
                   </select>
+                  <button onClick={() => delOrder(o.id)} data-testid={`admin-order-delete-${o.id}`} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50"><Trash2 className="w-4 h-4" /> Supprimer</button>
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {tab === "customers" && <CustomersPanel customers={customers} />}
+        {tab === "customers" && <CustomersPanel customers={customers} onChanged={loadAll} />}
 
         {tab === "brands" && (
           <div>
@@ -405,24 +418,56 @@ function Dashboard() {
   );
 }
 
-function CustomersPanel({ customers }) {
+function CustomersPanel({ customers, onChanged }) {
   const [selected, setSelected] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [manage, setManage] = useState(null);
+  const [delta, setDelta] = useState("");
+  const [override, setOverride] = useState("");
+  const [busy, setBusy] = useState(false);
   const view = async (c) => { setSelected(c); const { data } = await api.get(`/customers/${c.id}/orders`); setOrders(data); };
+  const openManage = (c) => { setManage(c); setDelta(""); setOverride(c.tier_override || ""); };
+  const tierBadge = (t) => {
+    const cls = t === "Gold" ? "bg-yellow-100 text-yellow-700" : t === "Silver" ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-700";
+    return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${cls}`}>{t || "—"}</span>;
+  };
+  const apply = async (kind) => {
+    setBusy(true);
+    try {
+      const body = {};
+      if (kind === "delta") { if (!delta) { toast.error("Entrez une valeur"); setBusy(false); return; } body.points_delta = Number(delta); }
+      if (kind === "override") body.tier_override = override || null;
+      const { data } = await api.put(`/customers/${manage.id}/loyalty`, body);
+      toast.success("Client mis à jour");
+      setManage({ ...manage, loyalty_points: data.loyalty_points, tier: data.tier, tier_override: data.tier_override });
+      setDelta("");
+      onChanged && onChanged();
+    } catch (e) { toast.error(formatApiError(e.response?.data?.detail)); }
+    finally { setBusy(false); }
+  };
   return (
     <div>
       <div className="bg-white rounded-2xl border border-slate-200/80 overflow-x-auto">
-        <table className="w-full text-sm min-w-[520px]" data-testid="admin-customers-table">
-          <thead className="bg-mint-50 text-slate-500 text-xs uppercase"><tr><th className="text-left p-3">Client</th><th className="text-left p-3">Contact</th><th className="text-left p-3">Inscrit le</th><th className="text-left p-3">Commandes</th><th className="p-3"></th></tr></thead>
+        <table className="w-full text-sm min-w-[720px]" data-testid="admin-customers-table">
+          <thead className="bg-mint-50 text-slate-500 text-xs uppercase"><tr><th className="text-left p-3">Client</th><th className="text-left p-3">Contact</th><th className="text-left p-3">Points</th><th className="text-left p-3">Statut</th><th className="text-left p-3">Parrainage</th><th className="text-left p-3">Cmd</th><th className="p-3"></th></tr></thead>
           <tbody>
-            {customers.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-slate-400">Aucun client inscrit.</td></tr>}
+            {customers.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-slate-400">Aucun client inscrit.</td></tr>}
             {customers.map((c) => (
               <tr key={c.id} className="border-t border-mint-50" data-testid={`customer-${c.id}`}>
                 <td className="p-3 font-medium">{c.first_name} {c.last_name}</td>
                 <td className="p-3 text-slate-500">{c.email || c.phone || "—"}</td>
-                <td className="p-3 text-slate-500">{c.created_at ? new Date(c.created_at).toLocaleDateString("fr-FR") : "—"}</td>
+                <td className="p-3 font-semibold text-mint-700" data-testid={`customer-points-${c.id}`}>{c.loyalty_points ?? 0}</td>
+                <td className="p-3" data-testid={`customer-tier-${c.id}`}>{tierBadge(c.tier)} {c.tier_override && <span className="text-[10px] text-slate-400">(manuel)</span>}</td>
+                <td className="p-3 text-xs text-slate-500">
+                  {c.referral_count > 0 && <div data-testid={`customer-refcount-${c.id}`}>{c.referral_count} filleul(s)</div>}
+                  {c.referred_by_name && <div className="text-slate-400">parrainé par {c.referred_by_name}</div>}
+                  {!c.referral_count && !c.referred_by_name && <span className="text-slate-300">—</span>}
+                </td>
                 <td className="p-3">{c.orders_count}</td>
-                <td className="p-3 text-right"><button onClick={() => view(c)} className="text-mint-700 font-semibold text-sm">Voir</button></td>
+                <td className="p-3 text-right whitespace-nowrap">
+                  <button onClick={() => openManage(c)} data-testid={`customer-manage-${c.id}`} className="text-mint-700 font-semibold text-sm mr-3">Gérer</button>
+                  <button onClick={() => view(c)} className="text-slate-500 text-sm">Voir</button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -437,6 +482,36 @@ function CustomersPanel({ customers }) {
               <div className="text-xs text-slate-400">{o.status} · {new Date(o.created_at).toLocaleDateString("fr-FR")}</div>
             </div>
           ))}
+        </Modal>
+      )}
+      {manage && (
+        <Modal title={`Fidélité — ${manage.first_name} ${manage.last_name}`} onClose={() => { setManage(null); }}>
+          <div className="space-y-4" data-testid="customer-loyalty-modal">
+            <div className="flex items-center justify-between bg-mint-50 rounded-xl p-3">
+              <span className="text-sm text-slate-600">Solde actuel</span>
+              <span className="font-display font-extrabold text-mint-700 text-xl" data-testid="manage-points">{manage.loyalty_points ?? 0} pts</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600">Statut actuel</span>
+              {tierBadge(manage.tier)}
+            </div>
+            <div>
+              <L label="Ajouter / retirer des points (ex: 100 ou -50)"><input type="number" value={delta} onChange={(e) => setDelta(e.target.value)} className={inp} data-testid="manage-points-delta" /></L>
+              <button onClick={() => apply("delta")} disabled={busy} data-testid="manage-points-apply" className="mt-2 px-4 py-2 rounded-full bg-mint-600 text-white text-sm font-semibold disabled:opacity-50">Appliquer</button>
+            </div>
+            <div className="border-t border-mint-100 pt-4">
+              <L label="Forcer un statut (laisser 'Automatique' pour calcul selon les points)">
+                <select value={override} onChange={(e) => setOverride(e.target.value)} className={inp} data-testid="manage-tier-override">
+                  <option value="">Automatique</option>
+                  <option value="BRONZE">BRONZE</option>
+                  <option value="Silver">Silver</option>
+                  <option value="Gold">Gold</option>
+                </select>
+              </L>
+              <button onClick={() => apply("override")} disabled={busy} data-testid="manage-tier-apply" className="mt-2 px-4 py-2 rounded-full bg-slate-800 text-white text-sm font-semibold disabled:opacity-50">Enregistrer le statut</button>
+            </div>
+            {manage.referral_code && <p className="text-xs text-slate-400">Code de parrainage : <span className="font-mono font-semibold text-slate-600">{manage.referral_code}</span></p>}
+          </div>
         </Modal>
       )}
     </div>
@@ -736,9 +811,9 @@ function AccountPanel() {
       <p className="text-sm text-slate-500">Modifiez votre nom, email et mot de passe. Le mot de passe actuel est requis pour valider.</p>
       <L label="Nom d'utilisateur"><input value={f.first_name} onChange={(e) => setF({ ...f, first_name: e.target.value })} data-testid="acc-name" className={inp} /></L>
       <L label="Email de connexion"><input value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} data-testid="acc-email" className={inp} /></L>
-      <L label="Nouveau mot de passe (laisser vide pour ne pas changer)"><input type="password" value={f.new_password} onChange={(e) => setF({ ...f, new_password: e.target.value })} data-testid="acc-new-password" className={inp} /></L>
+      <L label="Nouveau mot de passe (laisser vide pour ne pas changer)"><PwInput value={f.new_password} onChange={(e) => setF({ ...f, new_password: e.target.value })} testid="acc-new-password" /></L>
       <div className="h-px bg-mint-100" />
-      <L label="Mot de passe actuel *"><input type="password" value={f.current_password} onChange={(e) => setF({ ...f, current_password: e.target.value })} data-testid="acc-current-password" className={inp} /></L>
+      <L label="Mot de passe actuel *"><PwInput value={f.current_password} onChange={(e) => setF({ ...f, current_password: e.target.value })} testid="acc-current-password" /></L>
       <button onClick={save} disabled={busy} data-testid="acc-save" className="px-6 py-3 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold disabled:opacity-50">{busy ? "…" : "Enregistrer les modifications"}</button>
     </div>
   );
@@ -926,7 +1001,88 @@ function PageEditModal({ page, onClose, onSaved }) {
   );
 }
 
+function AnalyticsPanel() {
+  const [period, setPeriod] = useState("month");
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    api.get(`/admin/analytics?period=${period}`).then((r) => setData(r.data)).catch(() => setData(null)).finally(() => setLoading(false));
+  }, [period]);
+
+  const periods = [["day", "Aujourd'hui"], ["week", "7 jours"], ["month", "30 jours"], ["all", "Tout"]];
+
+  return (
+    <div className="space-y-5" data-testid="analytics-panel">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex gap-2">
+          {periods.map(([id, label]) => (
+            <button key={id} onClick={() => setPeriod(id)} data-testid={`analytics-period-${id}`}
+              className={`px-4 py-2 rounded-full text-sm font-semibold ${period === id ? "bg-mint-600 text-white" : "bg-white border border-mint-200 text-slate-600"}`}>{label}</button>
+          ))}
+        </div>
+        <p className="text-xs text-slate-400">Basé sur les commandes livrées</p>
+      </div>
+
+      {loading || !data ? <p className="text-slate-400 text-center py-12">Chargement…</p> : (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[[TrendingUp, "CA de la période", formatDA(data.revenue)], [ShoppingBag, "Commandes livrées", data.orders], [BarChart3, "Panier moyen", formatDA(data.aov)], [Users, "Nouveaux clients", data.new_customers]].map(([Icon, label, val], i) => (
+              <div key={i} className="bg-white rounded-2xl border border-slate-200/80 p-5" data-testid={`analytics-stat-${i}`}>
+                <Icon className="w-5 h-5 text-mint-600 mb-3" />
+                <div className="font-display font-extrabold text-2xl">{val}</div>
+                <div className="text-sm text-slate-500">{label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-5">
+            <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden" data-testid="analytics-top-products">
+              <div className="px-5 py-4 border-b border-slate-100 font-display font-bold flex items-center gap-2"><Package className="w-4 h-4 text-mint-600" /> Produits les plus vendus</div>
+              {data.top_products.length === 0 ? <p className="text-slate-400 text-sm p-5">Aucune vente sur cette période.</p> : (
+                <table className="w-full text-sm">
+                  <thead className="bg-mint-50 text-slate-500 text-xs uppercase"><tr><th className="text-left p-3">Produit</th><th className="text-right p-3">Qté</th><th className="text-right p-3">CA</th></tr></thead>
+                  <tbody>
+                    {data.top_products.map((p, i) => (
+                      <tr key={i} className="border-t border-mint-50" data-testid={`top-product-${i}`}>
+                        <td className="p-3 font-medium line-clamp-1">{p.name}</td>
+                        <td className="p-3 text-right font-semibold">{p.qty}</td>
+                        <td className="p-3 text-right text-mint-700 font-semibold whitespace-nowrap">{formatDA(p.revenue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden" data-testid="analytics-top-customers">
+              <div className="px-5 py-4 border-b border-slate-100 font-display font-bold flex items-center gap-2"><Users className="w-4 h-4 text-mint-600" /> Clients les plus dépensiers</div>
+              {data.top_customers.length === 0 ? <p className="text-slate-400 text-sm p-5">Aucun client sur cette période.</p> : (
+                <table className="w-full text-sm">
+                  <thead className="bg-mint-50 text-slate-500 text-xs uppercase"><tr><th className="text-left p-3">Client</th><th className="text-right p-3">Cmd</th><th className="text-right p-3">Dépensé</th></tr></thead>
+                  <tbody>
+                    {data.top_customers.map((c, i) => (
+                      <tr key={i} className="border-t border-mint-50" data-testid={`top-customer-${i}`}>
+                        <td className="p-3"><div className="font-medium line-clamp-1">{c.name || "—"}</div><div className="text-xs text-slate-400">{c.phone || ""}</div></td>
+                        <td className="p-3 text-right font-semibold">{c.orders}</td>
+                        <td className="p-3 text-right text-mint-700 font-semibold whitespace-nowrap">{formatDA(c.spent)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">Une commande erronée fausse ces chiffres ? Supprimez-la dans l'onglet « Commandes » pour la retirer du calcul.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ChatAdminPanel() {
+  const { settings } = useSettings();
   const [convs, setConvs] = useState([]);
   const [sel, setSel] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -948,6 +1104,12 @@ function ChatAdminPanel() {
     setText("");
     try { await api.post(`/admin/chat/${sel.id}/reply`, { text: t }); await loadMsgs(sel.id); loadConvs(); } catch {}
   };
+
+  const sendQuick = async (t) => {
+    if (!t || !sel) return;
+    try { await api.post(`/admin/chat/${sel.id}/reply`, { text: t }); await loadMsgs(sel.id); loadConvs(); } catch {}
+  };
+  const quickReplies = (settings.chat_quick_replies || []).filter(Boolean);
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden grid md:grid-cols-3 h-[600px]" data-testid="admin-chat-panel">
@@ -979,9 +1141,21 @@ function ChatAdminPanel() {
               ))}
               <div ref={bottomRef} />
             </div>
-            <div className="p-3 border-t border-slate-100 flex items-center gap-2">
-              <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && reply()} placeholder="Votre réponse…" data-testid="chat-admin-input" className={`${inp} rounded-full`} />
-              <button onClick={reply} data-testid="chat-admin-send" className="w-10 h-10 rounded-full bg-mint-600 text-white grid place-items-center shrink-0"><Send className="w-4 h-4" /></button>
+            <div className="p-3 border-t border-slate-100">
+              {quickReplies.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-1" data-testid="chat-quick-replies">
+                  {quickReplies.map((q, i) => (
+                    <button key={i} onClick={() => sendQuick(q)} data-testid={`chat-quick-reply-${i}`} title={q}
+                      className="shrink-0 px-3 py-1.5 rounded-full bg-mint-50 border border-mint-200 text-mint-700 text-xs font-medium hover:bg-mint-100 hover:border-mint-400 max-w-[220px] truncate">
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && reply()} placeholder="Votre réponse…" data-testid="chat-admin-input" className={`${inp} rounded-full`} />
+                <button onClick={reply} data-testid="chat-admin-send" className="w-10 h-10 rounded-full bg-mint-600 text-white grid place-items-center shrink-0"><Send className="w-4 h-4" /></button>
+              </div>
             </div>
           </>
         )}
@@ -1024,7 +1198,8 @@ function GiftAdminPanel() {
   const [editing, setEditing] = useState(null);
   const [busy, setBusy] = useState(false);
   const loadPacks = () => api.get("/admin/gift-packs").then((r) => setPacks(r.data)).catch(() => {});
-  useEffect(() => { api.get("/settings").then((r) => setF(r.data)); loadPacks(); }, []);
+  const [ecards, setEcards] = useState([]);
+  useEffect(() => { api.get("/settings").then((r) => setF(r.data)); loadPacks(); api.get("/admin/giftcards").then((r) => setEcards(r.data)).catch(() => {}); }, []);
   if (!f) return <p className="text-slate-400">Chargement…</p>;
 
   const amounts = f.giftcard_amounts || [];
@@ -1094,6 +1269,28 @@ function GiftAdminPanel() {
       </div>
 
       {editing !== null && <GiftPackModal pack={editing.id ? editing : null} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); loadPacks(); }} />}
+
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-6 max-w-3xl">
+        <h3 className="font-display font-bold text-lg mb-3">E-cartes cadeaux émises</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[620px]" data-testid="admin-ecards-table">
+            <thead className="bg-mint-50 text-slate-500 text-xs uppercase"><tr><th className="text-left p-2">Code</th><th className="text-left p-2">Montant</th><th className="text-left p-2">Solde</th><th className="text-left p-2">Envoi</th><th className="text-left p-2">Date</th><th className="text-left p-2">Statut</th></tr></thead>
+            <tbody>
+              {ecards.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-slate-400">Aucune e-carte.</td></tr>}
+              {ecards.map((c) => (
+                <tr key={c.id} className="border-t border-mint-50" data-testid={`admin-ecard-${c.id}`}>
+                  <td className="p-2 font-mono text-xs">{c.code}</td>
+                  <td className="p-2">{formatDA(c.amount)}</td>
+                  <td className="p-2 font-semibold text-mint-700">{formatDA(c.balance)}</td>
+                  <td className="p-2">{c.delivery === "email" ? `Email (${c.recipient_email || "—"})` : "Impression"}</td>
+                  <td className="p-2 text-slate-500">{c.scheduled_date || "—"}</td>
+                  <td className="p-2"><span className="px-2 py-0.5 rounded-full bg-slate-100 text-xs">{c.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1119,7 +1316,7 @@ function LoyaltyAdminPanel() {
     try {
       await api.put("/settings", {
         loyalty_enabled: f.loyalty_enabled, loyalty_points_per_100da: Number(f.loyalty_points_per_100da) || 1,
-        loyalty_tiers: tiers.map((t) => ({ name: t.name, min: Number(t.min) || 0 })),
+        loyalty_tiers: tiers.map((t) => ({ name: t.name, min: Number(t.min) || 0, perks: (t.perks || []).filter((p) => p && p.trim()) })),
         loyalty_rewards: rewards.map((r) => ({ ...r, points: Number(r.points) || 0, value: Number(r.value) || 0 })),
         referral_enabled: f.referral_enabled,
         referral_referrer_points: Number(f.referral_referrer_points) || 0,
@@ -1152,16 +1349,30 @@ function LoyaltyAdminPanel() {
       </div>
 
       <div>
-        <h4 className="font-semibold text-sm mb-2">Statuts (paliers)</h4>
-        <div className="space-y-2">
+        <h4 className="font-semibold text-sm mb-2">Statuts (paliers) & avantages</h4>
+        <div className="space-y-4">
           {tiers.map((t, i) => (
-            <div key={i} className="flex items-center gap-2" data-testid={`tier-row-${i}`}>
-              <input value={t.name} onChange={(e) => setTier(i, { name: e.target.value })} placeholder="Nom" className={`${inp} flex-1`} data-testid={`tier-name-${i}`} />
-              <input type="number" value={t.min} onChange={(e) => setTier(i, { min: e.target.value })} placeholder="Points min" className={`${inp} w-32`} data-testid={`tier-min-${i}`} />
-              <button onClick={() => delTier(i)} className="text-slate-400 hover:text-red-500 px-1"><Trash2 className="w-4 h-4" /></button>
+            <div key={i} className="border border-mint-100 rounded-xl p-3" data-testid={`tier-row-${i}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <input value={t.name} onChange={(e) => setTier(i, { name: e.target.value })} placeholder="Nom" className={`${inp} flex-1`} data-testid={`tier-name-${i}`} />
+                <input type="number" value={t.min} onChange={(e) => setTier(i, { min: e.target.value })} placeholder="Points min" className={`${inp} w-32`} data-testid={`tier-min-${i}`} />
+                <button onClick={() => delTier(i)} className="text-slate-400 hover:text-red-500 px-1"><Trash2 className="w-4 h-4" /></button>
+              </div>
+              <div className="pl-1">
+                <div className="text-xs font-medium text-slate-500 mb-1">Avantages</div>
+                <div className="space-y-1.5">
+                  {(t.perks || []).map((p, j) => (
+                    <div key={j} className="flex items-center gap-2" data-testid={`tier-${i}-perk-${j}`}>
+                      <input value={p} onChange={(e) => { const perks = [...(t.perks || [])]; perks[j] = e.target.value; setTier(i, { perks }); }} className={`${inp} flex-1`} data-testid={`tier-${i}-perk-input-${j}`} />
+                      <button onClick={() => setTier(i, { perks: (t.perks || []).filter((_, x) => x !== j) })} className="text-slate-400 hover:text-red-500" data-testid={`tier-${i}-perk-del-${j}`}><X className="w-4 h-4" /></button>
+                    </div>
+                  ))}
+                  <button onClick={() => setTier(i, { perks: [...(t.perks || []), "Nouvel avantage"] })} data-testid={`tier-${i}-perk-add`} className="flex items-center gap-1.5 text-mint-700 text-xs font-semibold"><Plus className="w-3.5 h-3.5" /> Ajouter un avantage</button>
+                </div>
+              </div>
             </div>
           ))}
-          <button onClick={addTier} className="flex items-center gap-1.5 text-mint-700 text-sm font-semibold"><Plus className="w-4 h-4" /> Ajouter un statut</button>
+          <button onClick={addTier} className="flex items-center gap-1.5 text-mint-700 text-sm font-semibold" data-testid="tier-add"><Plus className="w-4 h-4" /> Ajouter un statut</button>
         </div>
       </div>
 
@@ -1348,13 +1559,44 @@ function SettingsPanel() {
               <option value="summer">Été (turquoise)</option>
               <option value="autumn">Automne (orange)</option>
               <option value="winter">Hiver (bleu)</option>
+              <option value="rose">Rose poudré</option>
+              <option value="mauve">Mauve pâle</option>
+              <option value="gold">Doré</option>
+              <option value="noir">Noir</option>
             </select>
           </L>
         </div>
-        <div className="flex gap-2 mt-3">
-          {[["spring","#16A34A"],["summer","#0891B2"],["autumn","#EA580C"],["winter","#2563EB"]].map(([name,c]) => (
-            <span key={name} className="flex items-center gap-1.5 text-xs text-slate-500"><span className="w-4 h-4 rounded-full" style={{background:c}} />{name}</span>
+        <div className="flex flex-wrap gap-3 mt-3">
+          {[["spring","#16A34A"],["summer","#0891B2"],["autumn","#EA580C"],["winter","#2563EB"],["rose","#DB2777"],["mauve","#7C3AED"],["gold","#B07D1C"],["noir","#27272A"]].map(([name,c]) => (
+            <span key={name} className="flex items-center gap-1.5 text-xs text-slate-500 capitalize"><span className="w-4 h-4 rounded-full border border-slate-200" style={{background:c}} />{name}</span>
           ))}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="font-display font-bold text-lg mb-1">Application mobile (footer)</h3>
+        <p className="text-sm text-slate-500 mb-3">Affiche les boutons App Store / Google Play dans le pied de page.</p>
+        <label className="flex items-center gap-2 mb-3 text-sm font-medium">
+          <input type="checkbox" checked={!!f.app_download_enabled} onChange={(e) => set("app_download_enabled", e.target.checked)} data-testid="set-app-enabled" className="w-4 h-4 accent-mint-600" />
+          Activer la section « Téléchargez notre application »
+        </label>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <L label="Lien App Store (iOS)"><input value={f.app_store_url || ""} onChange={(e) => set("app_store_url", e.target.value)} placeholder="https://apps.apple.com/…" data-testid="set-app-store" className={inp} /></L>
+          <L label="Lien Google Play (Android)"><input value={f.play_store_url || ""} onChange={(e) => set("play_store_url", e.target.value)} placeholder="https://play.google.com/…" data-testid="set-play-store" className={inp} /></L>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="font-display font-bold text-lg mb-1">Réponses rapides du chat</h3>
+        <p className="text-sm text-slate-500 mb-3">Messages pré-écrits que vous pourrez envoyer en un clic depuis le chat pour orienter le client.</p>
+        <div className="space-y-2">
+          {(f.chat_quick_replies || []).map((q, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input value={q} onChange={(e) => { const arr = [...(f.chat_quick_replies || [])]; arr[i] = e.target.value; set("chat_quick_replies", arr); }} data-testid={`quick-reply-${i}`} className={inp} />
+              <button onClick={() => { const arr = (f.chat_quick_replies || []).filter((_, j) => j !== i); set("chat_quick_replies", arr); }} data-testid={`quick-reply-del-${i}`} className="text-slate-400 hover:text-red-500 shrink-0"><Trash2 className="w-4 h-4" /></button>
+            </div>
+          ))}
+          <button onClick={() => set("chat_quick_replies", [...(f.chat_quick_replies || []), ""])} data-testid="quick-reply-add" className="flex items-center gap-2 px-4 py-2 rounded-full bg-mint-50 border border-mint-200 text-mint-700 font-semibold text-sm hover:border-mint-400"><Plus className="w-4 h-4" /> Ajouter une réponse rapide</button>
         </div>
       </div>
       <div>

@@ -115,6 +115,19 @@ Site e-commerce de parapharmacie "Pharma360" basé en Algérie, inspiré de phar
 - Paiement en ligne par carte (CIB/Edahabia) = **SIMULÉ (démo)**. Stripe ne supporte pas l'Algérie (DZ), donc pas de passerelle réelle. La commande carte est marquée "payée" sans transaction réelle.
 - Email de notification de commande / reset password = **limité au tier gratuit Resend** (`onboarding@resend.dev` n'envoie qu'à l'adresse du propriétaire du compte). Le reset password propose le lien à l'écran en secours. Notification de nouveau message chat = in-app uniquement (pas d'email).
 
+## Implemented (2026-06 — iteration 20)
+- **CA = commandes livrées uniquement** : `GET /api/admin/stats` `revenue` ne somme que les commandes `status="Livrée"` (choix client). Libellé dashboard « Chiffre d'affaires (livré) ».
+- **Suppression de commande** : `DELETE /api/orders/{id}` (admin) supprime la commande + les gift_cards liées. Bouton rouge « Supprimer » (confirm) dans l'onglet Commandes → retire la commande du CA et des stats.
+- **Statistiques de vente** : `GET /api/admin/analytics?period=day|week|month|all` → revenue, orders, aov, total_customers, new_customers, top_products (nom/qté/CA), top_customers (nom/tél/cmd/dépensé), basé sur les commandes livrées. Nouvel onglet admin **Statistiques** avec sélecteur de période + 2 tableaux.
+- **Réponses rapides du chat** : `settings.chat_quick_replies` (éditable dans Paramètres). Boutons cliquables au-dessus de l'input du chat admin → envoi en un clic.
+- **Application mobile (footer)** : `settings.app_download_enabled` + `app_store_url` + `play_store_url`. Section « Téléchargez notre application Pharma360 » avec boutons App Store / Google Play (masquée par défaut, à activer + renseigner les liens dans l'admin).
+- **Badge de statut client** : badge Bronze/Silver/Gold sur l'en-tête du compte client (via `/api/loyalty/me`).
+- **Nouveaux thèmes** : rose (Rose poudré), mauve (Mauve pâle), gold (Doré), noir (Noir) ajoutés au sélecteur Apparence en plus des 4 saisons. Classes CSS `theme-rose/mauve/gold/noir`.
+- Tests : backend 10/10, frontend 100% sur les 6 flux (iteration_20).
+
+## Capacité (réponse client)
+- Produits : aucune limite pratique (dizaines/centaines de milliers). Clients : illimité en pratique. MongoDB évolue avec le trafic.
+
 ## Backlog
 - P1: SMS (Twilio) pour le lien de réinitialisation / notifications (nécessite clé API payante).
 - P1: Validation de stock avant commande (rejeter si insuffisant).

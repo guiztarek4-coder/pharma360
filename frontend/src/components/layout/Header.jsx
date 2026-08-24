@@ -186,6 +186,8 @@ export default function Header() {
           <Link to="/marques" data-testid="nav-marques" className="px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors whitespace-nowrap">Marques</Link>
           <Link to="/catalogue?is_new=1" data-testid="nav-nouveaux" className="px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors whitespace-nowrap">Nouveaux produits</Link>
           <Link to="/catalogue?on_promo=1" data-testid="nav-promo" className="px-2.5 py-1.5 text-sm font-semibold text-red-500 hover:text-red-600 transition-colors whitespace-nowrap">Promo</Link>
+          <Link to="/fidelite" data-testid="nav-fidelite" className="px-2.5 py-1.5 text-sm font-semibold text-mint-700 hover:text-mint-800 transition-colors whitespace-nowrap">Fidélité</Link>
+          <Link to="/carte-cadeau" data-testid="nav-carte-cadeau" className="px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:text-mint-700 transition-colors whitespace-nowrap">Carte cadeau</Link>
         </div>
       </nav>
 
@@ -232,6 +234,8 @@ export default function Header() {
               <div className="h-px bg-mint-100 my-2" />
               <Link to="/catalogue?is_new=1" onClick={() => setMobileMenu(false)} className="block px-3 py-2.5 rounded-lg hover:bg-mint-50 font-medium">Nouveaux produits</Link>
               <Link to="/catalogue?on_promo=1" onClick={() => setMobileMenu(false)} className="block px-3 py-2.5 rounded-lg hover:bg-mint-50 font-semibold text-red-500">Promo</Link>
+              <Link to="/fidelite" onClick={() => setMobileMenu(false)} data-testid="mobile-nav-fidelite" className="block px-3 py-2.5 rounded-lg hover:bg-mint-50 font-semibold text-mint-700">Programme de fidélité</Link>
+              <Link to="/carte-cadeau" onClick={() => setMobileMenu(false)} data-testid="mobile-nav-carte-cadeau" className="block px-3 py-2.5 rounded-lg hover:bg-mint-50 font-medium">Carte cadeau</Link>
               <div className="h-px bg-mint-100 my-2" />
               <Link to="/marques" onClick={() => setMobileMenu(false)} className="block px-3 py-2.5 rounded-lg hover:bg-mint-50 font-medium">Marques</Link>
               <Link to="/blog" onClick={() => setMobileMenu(false)} className="block px-3 py-2.5 rounded-lg hover:bg-mint-50 font-medium">Blog</Link>

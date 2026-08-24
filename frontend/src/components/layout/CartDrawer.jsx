@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { X, Plus, Minus, Trash2, ShoppingBag, Sparkles } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import api, { formatDA, mediaUrl } from "@/lib/api";

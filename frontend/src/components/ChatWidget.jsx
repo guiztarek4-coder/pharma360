@@ -4,6 +4,7 @@ import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
 const CONV_KEY = "pharma360_chat_conv";
+const ADVISOR_AVATAR = "https://static.prod-images.emergentagent.com/jobs/2a338cad-441d-4dda-a18b-505c5d5d8792/images/eb2b26c2cb3e797c665ea1348c6501d87779ebd6b2be48fa1e96b5c269a97a3e.jpeg";
 
 export default function ChatWidget() {
   const { user } = useAuth();
@@ -51,18 +52,27 @@ export default function ChatWidget() {
   return (
     <>
       {!open && (
-        <button onClick={() => setOpen(true)} data-testid="chat-open-btn"
-          className="fixed bottom-5 right-5 z-[9998] w-14 h-14 rounded-full bg-mint-600 hover:bg-mint-700 text-white shadow-xl shadow-mint-600/40 grid place-items-center transition-transform hover:scale-105">
-          <MessageCircle className="w-6 h-6" />
-        </button>
+        <div className="fixed bottom-5 right-5 z-[9998] flex items-center gap-3">
+          <button onClick={() => setOpen(true)} data-testid="chat-help-label"
+            className="hidden sm:block bg-white shadow-lg rounded-2xl px-4 py-2.5 text-sm font-semibold text-slate-700 border border-mint-100 animate-pulse-slow hover:text-mint-700">
+            Besoin d'aide ? <span className="text-mint-600">Cliquez ici</span>
+          </button>
+          <button onClick={() => setOpen(true)} data-testid="chat-open-btn" aria-label="Ouvrir le chat"
+            className="relative w-16 h-16 rounded-full bg-white shadow-xl shadow-mint-600/30 grid place-items-center transition-transform hover:scale-105 ring-4 ring-mint-500/30">
+            <img src={ADVISOR_AVATAR} alt="Conseillère" className="w-14 h-14 rounded-full object-cover" />
+            <span className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-green-500 border-2 border-white" />
+            <span className="absolute -top-1 -left-1 w-6 h-6 rounded-full bg-mint-600 text-white grid place-items-center shadow"><MessageCircle className="w-3.5 h-3.5" /></span>
+          </button>
+        </div>
       )}
 
       {open && (
         <div className="fixed bottom-5 right-5 z-[9999] w-[92vw] max-w-sm bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden" data-testid="chat-window" style={{ height: "min(70vh, 520px)" }}>
-          <div className="bg-mint-600 text-white px-5 py-4 flex items-center justify-between">
-            <div>
+          <div className="bg-mint-600 text-white px-5 py-4 flex items-center gap-3">
+            <img src={ADVISOR_AVATAR} alt="Conseillère" className="w-11 h-11 rounded-full object-cover ring-2 ring-white/40 shrink-0" />
+            <div className="flex-1">
               <div className="font-display font-bold">Service client Pharma360</div>
-              <div className="text-xs text-mint-100">Nous répondons rapidement</div>
+              <div className="text-xs text-mint-100 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-400" /> En ligne · réponse rapide</div>
             </div>
             <button onClick={() => setOpen(false)} data-testid="chat-close-btn" className="hover:bg-white/15 rounded-full p-1"><X className="w-5 h-5" /></button>
           </div>

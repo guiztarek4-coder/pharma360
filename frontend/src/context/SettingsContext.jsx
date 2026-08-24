@@ -58,7 +58,7 @@ export const SettingsProvider = ({ children }) => {
     const mode = settings.theme_mode || "auto";
     const active = mode === "manual" ? (settings.theme_manual || "spring") : seasonFromDate();
     const root = document.documentElement;
-    ["theme-spring", "theme-summer", "theme-autumn", "theme-winter"].forEach((c) => root.classList.remove(c));
+    ["theme-spring", "theme-summer", "theme-autumn", "theme-winter", "theme-rose", "theme-mauve", "theme-gold", "theme-noir"].forEach((c) => root.classList.remove(c));
     root.classList.add(`theme-${active}`);
   }, [settings.theme_mode, settings.theme_manual]);
 

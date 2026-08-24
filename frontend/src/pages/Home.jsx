@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ShieldCheck, Truck, CreditCard, Sparkles } from "lucide-react";
+import { ArrowRight, ShieldCheck, Truck, CreditCard, Sparkles, Gift, Award } from "lucide-react";
 import api, { mediaUrl } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
 import { useSettings } from "@/context/SettingsContext";
@@ -109,7 +109,24 @@ export default function Home() {
           </div>
         </section>
 
-        {featured.length > 0 && (
+        {/* Promo banners: Loyalty + Gift card */}
+        <section className="grid md:grid-cols-2 gap-5" data-testid="section-promo-banners">
+          <Link to="/fidelite" data-testid="banner-loyalty" className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-mint-600 to-mint-800 text-white p-8 min-h-[200px] flex flex-col justify-center shadow-lg shadow-mint-600/25 hover:shadow-xl transition-shadow">
+            <Award className="absolute -right-4 -top-4 w-40 h-40 text-white/10 rotate-12" />
+            <span className="inline-flex items-center gap-2 text-xs font-mono-label bg-white/15 px-3 py-1 rounded-full w-fit mb-3"><Sparkles className="w-3.5 h-3.5" /> Programme de fidélité</span>
+            <h3 className="font-display font-extrabold text-2xl sm:text-3xl leading-tight relative z-10">Gagnez des points<br />à chaque commande</h3>
+            <p className="text-mint-100 mt-2 relative z-10 max-w-md">Cumulez des points, montez en statut BRONZE, Silver et Gold, et échangez vos points contre des récompenses.</p>
+            <span className="mt-4 inline-flex items-center gap-1.5 font-semibold relative z-10 group-hover:gap-3 transition-all">Découvrir le programme <ArrowRight className="w-4 h-4" /></span>
+          </Link>
+          <Link to="/carte-cadeau" data-testid="banner-giftcard" className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-800 to-slate-900 text-white p-8 min-h-[200px] flex flex-col justify-center shadow-lg hover:shadow-xl transition-shadow">
+            <Gift className="absolute -right-4 -top-4 w-40 h-40 text-white/10 -rotate-12" />
+            <span className="inline-flex items-center gap-2 text-xs font-mono-label bg-white/15 px-3 py-1 rounded-full w-fit mb-3"><CreditCard className="w-3.5 h-3.5" /> Cartes cadeaux</span>
+            <h3 className="font-display font-extrabold text-2xl sm:text-3xl leading-tight relative z-10">Offrez une<br />carte cadeau Pharma360</h3>
+            <p className="text-slate-300 mt-2 relative z-10 max-w-md">Le cadeau idéal pour vos proches : montant au choix, livraison partout en Algérie.</p>
+            <span className="mt-4 inline-flex items-center gap-1.5 font-semibold relative z-10 group-hover:gap-3 transition-all">Commander une carte <ArrowRight className="w-4 h-4" /></span>
+          </Link>
+        </section>
+
           <section data-testid="section-coups-de-coeur">
             <SectionHeader title="💚 Nos Coups de Cœur" subtitle="Sélectionnés et approuvés par nos pharmaciens experts" to="/catalogue?featured=1" />
             <Grid products={featured} />
