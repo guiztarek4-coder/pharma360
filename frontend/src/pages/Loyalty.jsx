@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Gift, Award, Sparkles, Crown, Star, Copy, Check } from "lucide-react";
+import { Gift, Award, Sparkles, Crown, Star, Copy, Check, Percent, PartyPopper } from "lucide-react";
 import { toast } from "sonner";
-import api from "@/lib/api";
+import api, { formatDA, mediaUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useCart } from "@/context/CartContext";
 
 const TIER_ICON = { BRONZE: Award, Silver: Star, Gold: Crown };
 const TIER_COLOR = { BRONZE: "text-amber-700 bg-amber-100", Silver: "text-slate-500 bg-slate-100", Gold: "text-yellow-600 bg-yellow-100" };
 
 export function LoyaltyContent() {
   const { user, refresh } = useAuth();
+  const { addItem } = useCart();
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(null);
   const [copied, setCopied] = useState("");
@@ -22,6 +24,17 @@ export function LoyaltyContent() {
 
   if (!data) return <p className="text-slate-400 text-center py-10">Chargement…</p>;
   if (!data.enabled) return <p className="text-slate-400 text-center py-10">Le programme de fidélité est actuellement indisponible.</p>;
+
+  const claimGift = async (tierName, gift) => {
+    setBusy(`gift-${gift.id}`);
+    try {
+      const { data: res } = await api.post("/loyalty/claim-gift", { tier: tierName, gift_id: gift.id });
+      toast.success(`Cadeau réclamé ! Votre code : ${res.code}`);
+      await refresh(); load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Échec de la réclamation");
+    } finally { setBusy(null); }
+  };
 
   const redeem = async (reward) => {
     setBusy(reward.id);
@@ -55,7 +68,7 @@ export function LoyaltyContent() {
               <div className="text-mint-100 text-sm mt-1">points disponibles</div>
             </div>
             <div className={`flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 backdrop-blur`} data-testid="loyalty-tier">
-              <TierIcon className="w-5 h-5" /> <span className="font-bold">Statut {tier?.name}</span>
+              <TierIcon className="w-5 h-5" /> <span className="font-bold">{tier ? `Statut ${tier.name}` : "Nouveau membre"}</span>
             </div>
           </div>
           {next && (
@@ -84,6 +97,76 @@ export function LoyaltyContent() {
           <h2 className="font-display font-extrabold text-xl mb-2">Cumulez des points à chaque commande</h2>
           <p className="text-slate-500 mb-5">Connectez-vous pour rejoindre le programme de fidélité Pharma360 et transformez vos achats en récompenses.</p>
           <Link to="/compte" data-testid="loyalty-login-link" className="inline-block px-6 py-3 rounded-full bg-mint-600 text-white font-semibold hover:bg-mint-700">Se connecter / S'inscrire</Link>
+        </div>
+      )}
+
+      {/* Status gifts — congratulations + gift chooser (one gift per tier) */}
+      {user && (data.gift_tiers || []).some((gt) => gt.gifts.length > 0) && (
+        <div className="space-y-4" data-testid="loyalty-gifts">
+          {(data.gift_tiers || []).filter((gt) => gt.gifts.length > 0).map((gt) => (
+            <div key={gt.tier} className="rounded-3xl border-2 border-mint-200 bg-gradient-to-br from-mint-50 to-white p-6" data-testid={`gift-tier-${gt.tier}`}>
+              <div className="flex items-center gap-2 mb-1">
+                <PartyPopper className="w-6 h-6 text-mint-600" />
+                <h3 className="font-display font-extrabold text-lg">Félicitations ! Vous êtes {gt.tier}</h3>
+              </div>
+              {gt.claimed ? (
+                <div className="mt-3 rounded-2xl bg-white border border-mint-200 p-4" data-testid={`gift-claimed-${gt.tier}`}>
+                  <p className="text-sm text-slate-600 mb-2">Vous avez choisi votre cadeau <b>{gt.claimed_gift_name}</b>. Utilisez ce code au paiement pour le recevoir gratuitement avec votre commande :</p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="px-4 py-2 rounded-xl bg-mint-600 text-white font-mono font-bold tracking-wider" data-testid={`gift-code-${gt.tier}`}>{gt.claimed_code}</span>
+                    <button onClick={() => copy(gt.claimed_code)} className="flex items-center gap-1.5 text-sm text-mint-700 font-semibold">
+                      {copied === gt.claimed_code ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />} Copier
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-slate-600 mb-3">Choisissez <b>un</b> cadeau offert pour ce statut (un seul cadeau par statut) :</p>
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {gt.gifts.map((g) => (
+                      <div key={g.id} className="bg-white rounded-2xl border border-slate-200/80 p-4 flex flex-col items-center text-center" data-testid={`gift-option-${g.id}`}>
+                        {g.image ? <img src={mediaUrl(g.image)} alt={g.name} className="w-20 h-20 rounded-xl object-cover mb-2 bg-mint-50" /> : <span className="w-20 h-20 rounded-xl bg-mint-50 grid place-items-center mb-2"><Gift className="w-8 h-8 text-mint-500" /></span>}
+                        <div className="font-semibold text-sm line-clamp-2 flex-1">{g.name}</div>
+                        <button onClick={() => claimGift(gt.tier, g)} disabled={busy === `gift-${g.id}`} data-testid={`gift-claim-${g.id}`}
+                          className="mt-3 w-full py-2 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold text-sm disabled:opacity-40">
+                          {busy === `gift-${g.id}` ? "…" : "Choisir ce cadeau"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Exclusive tier offers */}
+      {user && (data.offers || []).length > 0 && (
+        <div data-testid="loyalty-offers">
+          <h3 className="font-display font-bold text-lg mb-1 flex items-center gap-2"><Percent className="w-5 h-5 text-mint-600" /> Offres exclusives {tier?.name}</h3>
+          <p className="text-sm text-slate-500 mb-3">Réservées à votre statut. La réduction est appliquée automatiquement à la commande.</p>
+          <div className="space-y-4">
+            {data.offers.map((o) => (
+              <div key={o.id} className="rounded-2xl border border-mint-200 bg-mint-50/40 p-4" data-testid={`offer-${o.id}`}>
+                <div className="font-semibold mb-3 flex items-center gap-2"><span className="px-2 py-0.5 rounded-full bg-mint-600 text-white text-xs font-bold">-{o.discount_value}{o.discount_type === "percent" ? "%" : " DA"}</span> {o.title}</div>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {o.products.map((p) => (
+                    <div key={p.id} className="bg-white rounded-2xl border border-slate-200/80 p-3 flex flex-col" data-testid={`offer-product-${p.id}`}>
+                      <img src={mediaUrl(p.images?.[0])} alt={p.name} className="w-full h-24 rounded-xl object-cover bg-mint-50 mb-2" />
+                      <div className="text-sm font-medium line-clamp-2 flex-1">{p.name}</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-mint-700 font-bold">{formatDA(p.offer_price)}</span>
+                        <span className="text-xs text-slate-400 line-through">{formatDA(p.original_price)}</span>
+                      </div>
+                      <button onClick={() => { addItem({ ...p, price: p.offer_price }, 1); toast.success("Ajouté au panier au prix membre"); }} data-testid={`offer-add-${p.id}`}
+                        className="mt-2 w-full py-2 rounded-full bg-mint-600 hover:bg-mint-700 text-white font-semibold text-sm">Ajouter au panier</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

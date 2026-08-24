@@ -233,6 +233,7 @@ class OrderInput(BaseModel):
     delivery_method: str = "domicile"  # "pickup" | "domicile" | "relais"
     promo_code: str = ""
     giftcard_code: str = ""
+    gift_code: str = ""
     notes: str = ""
 
 
@@ -1366,7 +1367,49 @@ async def validate_promo(payload: dict):
 async def create_order(data: OrderInput, request: Request):
     if not data.items:
         raise HTTPException(status_code=400, detail="Le panier est vide")
-    subtotal = compute_subtotal(data.items)
+    user = None
+    try:
+        user = await get_current_user(request)
+    except HTTPException:
+        pass
+    s = await db.settings.find_one({"_id": "site"}) or {}
+
+    # Member-exclusive offer pricing: reduce price of covered products for the buyer's tier
+    member_offers = {}
+    if user and s.get("loyalty_enabled", True):
+        cur, _ = _loyalty_tier(int(user.get("loyalty_points", 0)), s.get("loyalty_tiers", []))
+        tier_name = user.get("loyalty_tier_override") or (cur.get("name") if cur else None)
+        if tier_name:
+            for o in s.get("loyalty_offers", []):
+                if o.get("enabled", True) and tier_name in (o.get("tiers") or []):
+                    for pid in (o.get("product_ids") or []):
+                        member_offers[pid] = (o.get("discount_type", "percent"), o.get("discount_value", 0))
+
+    order_items = []
+    for i in data.items:
+        it = i.model_dump()
+        if i.product_id in member_offers and not i.ecard:
+            dt, dv = member_offers[i.product_id]
+            it["original_price"] = it["price"]
+            it["price"] = _offer_price(float(it["price"]), dt, dv)
+            it["member_offer"] = True
+        order_items.append(it)
+
+    # Free loyalty gift attached via a personal single-use gift code
+    gift_code_used = ""
+    if data.gift_code and user:
+        gcode = data.gift_code.strip().upper()
+        gcp = await db.promo_codes.find_one({"code": gcode, "type": "gift", "active": True, "user_id": str(user["_id"])})
+        if not gcp:
+            raise HTTPException(status_code=400, detail="Code cadeau invalide, déjà utilisé ou non associé à votre compte")
+        g = gcp.get("gift") or {}
+        order_items.append({
+            "product_id": g.get("product_id") or "", "name": "🎁 " + (g.get("name") or "Cadeau fidélité"),
+            "price": 0, "quantity": 1, "image": g.get("image"), "is_gift": True, "gift_code": gcode,
+        })
+        gift_code_used = gcode
+
+    subtotal = round(sum(float(it["price"]) * int(it["quantity"]) for it in order_items), 2)
     delivery = await compute_delivery(data.delivery_method, data.wilaya, data.commune, data.agency, subtotal)
     discount = await apply_promo(data.promo_code, subtotal)
     total = max(0, subtotal + delivery - discount)
@@ -1378,19 +1421,15 @@ async def create_order(data: OrderInput, request: Request):
         if gc and float(gc.get("balance", 0)) > 0:
             giftcard_applied = min(float(gc["balance"]), total)
             total = max(0, total - giftcard_applied)
-    user = None
-    try:
-        user = await get_current_user(request)
-    except HTTPException:
-        pass
     order = {
-        "items": [i.model_dump() for i in data.items],
+        "items": order_items,
         "subtotal": subtotal,
         "delivery": delivery,
         "discount": discount,
         "promo_code": data.promo_code.strip().upper() if data.promo_code else "",
         "giftcard_code": data.giftcard_code.strip().upper() if data.giftcard_code else "",
         "giftcard_applied": giftcard_applied,
+        "gift_code": gift_code_used,
         "total": total,
         "full_name": data.full_name,
         "phone": data.phone,
@@ -1432,6 +1471,11 @@ async def create_order(data: OrderInput, request: Request):
         await db.promo_codes.update_one(
             {"code": data.promo_code.strip().upper(), "single_use": True},
             {"$set": {"active": False}})
+    # single-use loyalty gift code: consume after use
+    if gift_code_used:
+        await db.promo_codes.update_one(
+            {"code": gift_code_used, "type": "gift"},
+            {"$set": {"active": False, "used_at": now_utc().isoformat()}})
     for item in data.items:
         if ObjectId.is_valid(item.product_id):
             await db.products.update_one({"_id": ObjectId(item.product_id)},
@@ -1497,15 +1541,59 @@ async def update_order_status(order_id: str, payload: dict, admin: dict = Depend
 # ----------------------------------------------------------------------------
 # Loyalty program
 # ----------------------------------------------------------------------------
-def _loyalty_tier(lifetime: int, tiers: list):
+def _loyalty_tier(points: int, tiers: list):
+    """Return (current_tier, next_tier) based on the CURRENT points balance.
+    If points are below the lowest tier's minimum, current is None (no status yet)."""
     tiers = sorted(tiers or [], key=lambda t: t.get("min", 0))
-    current = tiers[0] if tiers else {"name": "Bronze", "min": 0}
-    nxt = None
+    if not tiers:
+        return None, None
+    current = None
+    nxt = tiers[0]
     for i, t in enumerate(tiers):
-        if lifetime >= t.get("min", 0):
+        if points >= t.get("min", 0):
             current = t
             nxt = tiers[i + 1] if i + 1 < len(tiers) else None
     return current, nxt
+
+
+async def _resolve_gift(g: dict):
+    """Resolve a tier gift item for display. Product gifts pull name/image/price from catalog."""
+    out = {"id": g.get("id"), "type": g.get("type", "custom"), "name": g.get("name", ""),
+           "image": g.get("image"), "product_id": g.get("product_id")}
+    if g.get("type") == "product" and g.get("product_id") and ObjectId.is_valid(g["product_id"]):
+        p = await db.products.find_one({"_id": ObjectId(g["product_id"])})
+        if p:
+            out["name"] = p.get("name", out["name"])
+            out["image"] = (p.get("images") or [None])[0] or out["image"]
+            out["value"] = float(p.get("price", 0))
+    return out
+
+
+def _offer_price(price: float, otype: str, value: float):
+    if otype == "percent":
+        return round(max(0, price - price * float(value) / 100), 2)
+    return round(max(0, price - float(value)), 2)
+
+
+async def _offers_for_tier(tier_name, settings):
+    """Return active loyalty offers visible to a given tier, with resolved products + discounted price."""
+    out = []
+    for o in settings.get("loyalty_offers", []):
+        if not o.get("enabled", True):
+            continue
+        if tier_name not in (o.get("tiers") or []):
+            continue
+        prods = await _resolve_products(o.get("product_ids", []))
+        items = []
+        for p in prods:
+            items.append({**p, "original_price": p.get("price"),
+                          "offer_price": _offer_price(float(p.get("price", 0)), o.get("discount_type", "percent"), o.get("discount_value", 0))})
+        out.append({
+            "id": o.get("id"), "title": o.get("title", ""),
+            "discount_type": o.get("discount_type", "percent"), "discount_value": o.get("discount_value", 0),
+            "products": items,
+        })
+    return out
 
 
 @api.get("/loyalty/config")
@@ -1542,6 +1630,26 @@ async def loyalty_me(user: dict = Depends(get_current_user)):
     referral_count = await db.users.count_documents({"referred_by": str(user["_id"])})
     # personal reward codes still active
     codes = await db.promo_codes.find({"source": "loyalty", "user_id": str(user["_id"])}).sort("created_at", -1).to_list(50)
+    # gift claims + gift chooser for every tier the user currently qualifies for
+    claims = user.get("gift_claims", []) or []
+    claimed_tiers = {c.get("tier"): c for c in claims}
+    gift_tiers = []
+    for t in sorted(tiers, key=lambda x: x.get("min", 0)):
+        if points < t.get("min", 0):
+            continue
+        resolved = [await _resolve_gift(g) for g in (t.get("gifts") or [])]
+        cl = claimed_tiers.get(t.get("name"))
+        gift_tiers.append({
+            "tier": t.get("name"),
+            "min": t.get("min", 0),
+            "gifts": resolved,
+            "claimed": bool(cl),
+            "claimed_gift_name": cl.get("gift_name") if cl else None,
+            "claimed_code": cl.get("code") if cl else None,
+        })
+    gift_codes = await db.promo_codes.find({"source": "loyalty_gift", "user_id": str(user["_id"])}).sort("created_at", -1).to_list(50)
+    # exclusive product offers reserved to the user's current tier
+    offers = await _offers_for_tier(current.get("name"), s) if current else []
     return {
         "enabled": s.get("loyalty_enabled", True),
         "points": points,
@@ -1553,6 +1661,9 @@ async def loyalty_me(user: dict = Depends(get_current_user)):
         "tiers": tiers,
         "rewards": [r for r in s.get("loyalty_rewards", []) if r.get("enabled", True)],
         "my_codes": [clean(c) for c in codes],
+        "gift_tiers": gift_tiers,
+        "my_gift_codes": [clean(c) for c in gift_codes],
+        "offers": offers,
         "referral": {
             "enabled": s.get("referral_enabled", True),
             "code": ref_code,
@@ -1561,6 +1672,39 @@ async def loyalty_me(user: dict = Depends(get_current_user)):
             "count": referral_count,
         },
     }
+
+
+@api.post("/loyalty/claim-gift")
+async def loyalty_claim_gift(payload: dict, user: dict = Depends(get_current_user)):
+    s = await db.settings.find_one({"_id": "site"}) or {}
+    if not s.get("loyalty_enabled", True):
+        raise HTTPException(status_code=400, detail="Programme de fidélité désactivé")
+    tier_name = payload.get("tier")
+    gift_id = payload.get("gift_id")
+    tiers = s.get("loyalty_tiers", [])
+    tier = next((t for t in tiers if t.get("name") == tier_name), None)
+    if not tier:
+        raise HTTPException(status_code=404, detail="Statut introuvable")
+    points = int(user.get("loyalty_points", 0))
+    if points < int(tier.get("min", 0)):
+        raise HTTPException(status_code=400, detail="Vous n'avez pas encore atteint ce statut")
+    gift = next((g for g in (tier.get("gifts") or []) if g.get("id") == gift_id), None)
+    if not gift:
+        raise HTTPException(status_code=404, detail="Cadeau introuvable")
+    claims = user.get("gift_claims", []) or []
+    if any(c.get("tier") == tier_name for c in claims):
+        raise HTTPException(status_code=400, detail="Vous avez déjà réclamé le cadeau de ce statut")
+    resolved = await _resolve_gift(gift)
+    code = "CADEAU-" + secrets.token_hex(3).upper()
+    await db.promo_codes.insert_one({
+        "code": code, "type": "gift", "value": 0, "active": True, "single_use": True,
+        "source": "loyalty_gift", "user_id": str(user["_id"]),
+        "reward_label": resolved["name"], "gift": resolved, "tier": tier_name,
+        "created_at": now_utc().isoformat(),
+    })
+    claim = {"tier": tier_name, "gift_id": gift_id, "gift_name": resolved["name"], "code": code, "created_at": now_utc().isoformat()}
+    await db.users.update_one({"_id": user["_id"]}, {"$push": {"gift_claims": claim}})
+    return {"ok": True, "code": code, "gift": resolved}
 
 
 @api.post("/loyalty/redeem")
@@ -2207,6 +2351,17 @@ DEFAULT_SETTINGS = {
     "app_download_enabled": False,
     "app_store_url": "",
     "play_store_url": "",
+    "loyalty_offers": [],
+    "theme_presets": [
+        {"id": "rose_ivoire", "name": "Rose poudré & Blanc ivoire", "accent": "#E8B4B8", "bg": "#FDF8F5"},
+        {"id": "mauve_casse", "name": "Mauve / Lilas & Blanc cassé", "accent": "#C9A0DC", "bg": "#FAF7FB"},
+        {"id": "corail_beige", "name": "Corail doux & Beige rosé", "accent": "#F2A9A0", "bg": "#F7ECE8"},
+        {"id": "dusty_sauge", "name": "Rose vieux & Vert sauge clair", "accent": "#D6A2A2", "bg": "#E8EDE3"},
+        {"id": "lilas_dore", "name": "Lilas & Doré doux", "accent": "#B8A9D9", "bg": "#EAD9A0"},
+        {"id": "bleu_creme", "name": "Bleu poudré & Blanc crème", "accent": "#A8C3D4", "bg": "#FAF6EF"},
+        {"id": "terracotta_sauge", "name": "Terracotta doux & Vert sauge", "accent": "#D4977A", "bg": "#B7C4A8"},
+        {"id": "aubergine_beige", "name": "Violet aubergine & Beige rosé clair", "accent": "#8B6F9E", "bg": "#F0E4DD"},
+    ],
 }
 
 

@@ -1,0 +1,35 @@
+{
+  "summary": "Frontend-only verification of iteration 21 (loyalty gifts, exclusive offers, tier bug fix, checkout gift-code, admin loyalty panel & 8 theme presets). Setup done via API (admin login + PUT /api/settings with BRONZE gift [product+custom] + 20% BRONZE offer + fresh customer @200pts). Verified end-to-end in the browser: (1) /compte shows profile-tier-badge='Statut BRONZE'. (2) /fidelite renders loyalty-gifts, gift-tier-BRONZE, 2 gift options; clicking gift-claim-* produced gift-code-BRONZE='CADEAU-B1595C' (correct format); after reload only gift-claimed-BRONZE is visible and 0 claim buttons -> one-gift-per-tier enforced. (3) loyalty-offers section rendered with offer-add-{id}; click adds product at member price. (4) /commande gift-code-input auto-filled; order placed => confirmation page contains '🎁'; GET /orders/mine shows two line items: base product at member-priced 2528 DA + '🎁 Eucerin Bandages Advanced' at price 0 (gift free, offer discount + gift both applied). (5) TIER BUG: after PUT loyalty_tiers with BRONZE min=500 (customer=200pts) badge on /compte changes to 'Nouveau membre' with neutral style; GET /loyalty/me returns tier=null; admin GET /customers list returns tier=null too. (6) Admin UI (/admin -> admin-tab-loyalty): admin-loyalty-panel + gift-product-search + tier-0-gift-add-custom + tier-0-gift-name-* + offer-add + offer-title/type/value/-tier-BRONZE + loyalty-save all present and functional. (7) admin-tab-settings shows all 8 theme-preset-{0..7} with name/accent/bg color inputs and apply buttons; theme-manual dropdown lists 4 seasons + 8 preset ids. Direct PUT theme_mode=manual + theme_manual=rose_ivoire yields --mint-600=#b52632 and --mint-50=#FDF8F5 site-wide on / with header/buttons/badges taking the rose palette and layout intact. Settings reset to auto+defaults at end. No critical UI defects found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/commande", "issues": ["React hydration warning: <span> cannot be a child of <option> in the Wilaya select (Checkout.jsx line 244). Cosmetic — does not break UX but should be fixed by rendering `{w.code} — {w.name}` directly without wrapping the expression in a <span>."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_21.json",
+    "/app/test_reports/iter21_theme_home.png",
+    "/app/test_reports/iter21_rose.png"
+  ],
+  "action_items": [
+    "(Optional / cosmetic) Fix the option hydration warning in /commande Wilaya select (Checkout.jsx ~line 244) by not wrapping the label expression in a <span> inside <option>."
+  ],
+  "critical_code_review_comments": [
+    "Admin.jsx is now 1727 lines — split LoyaltyAdminPanel, SettingsPanel, ChatAdminPanel, AnalyticsPanel into /pages/admin/*.jsx for maintainability.",
+    "GiftProductAdd inline component only exposes gift-product-search but not gift-product-result-{id} (the spec calls those out). Currently product results render as generic <button> — consider adding data-testid={`gift-product-result-${p.id}`} to each result row for E2E stability.",
+    "Loyalty save() strips out gifts whose name is empty (custom gift without name) silently — a toast warning would improve UX so admins know their empty custom rows were dropped.",
+    "SettingsPanel.save() PUTs the ENTIRE settings object (~all fields) on every save; consider sending only diff or split by section to avoid overwriting unrelated fields under concurrent edits.",
+    "applyPresetVars sets 10 CSS vars via inline style; wrapping them under a class name (e.g., theme-custom) with CSS variable declarations would be more idiomatic but current approach works.",
+    "Account.jsx line 152 renders the badge only if tier is truthy; because r.data?.tier?.name || '__new__' returns a string, this works — but if loyalty is disabled the badge is silently hidden, which is fine but could be documented."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% (7/7 flows)"},
+  "test_credentials": "Admin: pharmacie360benak@gmail.com / Aminetarek1992*. Test customer created: tst_b21_1787600205@t.com / TestPass1234! (id=6a8c9d4e67db07d93ff3e8dc, 200 points).",
+  "seed_data_creation": "During test: 1 customer + 1 order + 1 gift claim (CADEAU-B1595C consumed). Settings temporarily mutated (loyalty_tiers, loyalty_offers, theme_mode/manual) then RESET at end: loyalty_tiers=default 3 tiers, loyalty_offers=[], theme_mode=auto, theme_manual=spring. Verified via API on reset.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All iteration-21 frontend flows work. Test customer tst_b21_1787600205@t.com still has 200 points and one claimed BRONZE gift on record (code CADEAU-B1595C, already consumed). If the next agent runs this again, register a fresh customer to avoid the one-gift-per-tier lock. Note the small hydration warning in Checkout.jsx <option> is the only cosmetic issue.",
+  "rca of the issue": "N/A — all requested flows pass. First run had two false negatives: (a) client login used wrong testid 'login-submit' — the real one is 'auth-submit' (Account.jsx L79); (b) admin login submit is not button[type=submit], must click by role/name 'Se connecter'. Both were selector issues in my scripts, not app bugs."
+}

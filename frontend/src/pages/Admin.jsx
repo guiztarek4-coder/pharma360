@@ -1295,6 +1295,30 @@ function GiftAdminPanel() {
   );
 }
 
+function GiftProductAdd({ onAdd }) {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState([]);
+  useEffect(() => {
+    if (q.length < 2) { setResults([]); return; }
+    const t = setTimeout(() => { api.get(`/products?search=${encodeURIComponent(q)}&limit=8`).then((r) => setResults(r.data)).catch(() => {}); }, 250);
+    return () => clearTimeout(t);
+  }, [q]);
+  return (
+    <div className="relative">
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un produit du catalogue à offrir…" className={inp} data-testid="gift-product-search" />
+      {results.length > 0 && (
+        <div className="absolute z-10 left-0 right-0 mt-1 bg-white rounded-xl border border-mint-100 shadow-lg max-h-52 overflow-auto">
+          {results.map((p) => (
+            <button type="button" key={p.id} onClick={() => { onAdd(p); setQ(""); setResults([]); }} data-testid={`gift-product-result-${p.id}`} className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-mint-50">
+              <img src={mediaUrl(p.images?.[0])} alt="" className="w-8 h-8 rounded-lg object-cover bg-mint-50" /> <span className="flex-1 line-clamp-1">{p.name}</span> <span className="text-mint-700 font-semibold">{formatDA(p.price)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LoyaltyAdminPanel() {
   const { refresh } = useSettings();
   const [f, setF] = useState(null);
@@ -1304,20 +1328,31 @@ function LoyaltyAdminPanel() {
 
   const tiers = f.loyalty_tiers || [];
   const rewards = f.loyalty_rewards || [];
+  const offers = f.loyalty_offers || [];
   const setTier = (i, patch) => { const a = [...tiers]; a[i] = { ...a[i], ...patch }; setF({ ...f, loyalty_tiers: a }); };
-  const addTier = () => setF({ ...f, loyalty_tiers: [...tiers, { name: "Nouveau", min: 0 }] });
+  const addTier = () => setF({ ...f, loyalty_tiers: [...tiers, { name: "Nouveau", min: 0, gifts: [] }] });
   const delTier = (i) => setF({ ...f, loyalty_tiers: tiers.filter((_, x) => x !== i) });
   const setRw = (i, patch) => { const a = [...rewards]; a[i] = { ...a[i], ...patch }; setF({ ...f, loyalty_rewards: a }); };
   const addRw = () => setF({ ...f, loyalty_rewards: [...rewards, { id: `r${Date.now()}`, label: "Nouvelle récompense", points: 500, type: "fixed", value: 500, enabled: true }] });
   const delRw = (i) => setF({ ...f, loyalty_rewards: rewards.filter((_, x) => x !== i) });
+  // gifts per tier
+  const addProductGift = (i, p) => setTier(i, { gifts: [...(tiers[i].gifts || []), { id: `g${Date.now()}`, type: "product", product_id: p.id, name: p.name, image: p.images?.[0] || null }] });
+  const addCustomGift = (i) => setTier(i, { gifts: [...(tiers[i].gifts || []), { id: `g${Date.now()}`, type: "custom", name: "", image: null }] });
+  const setGift = (i, j, patch) => { const g = [...(tiers[i].gifts || [])]; g[j] = { ...g[j], ...patch }; setTier(i, { gifts: g }); };
+  const delGift = (i, j) => setTier(i, { gifts: (tiers[i].gifts || []).filter((_, x) => x !== j) });
+  // exclusive offers
+  const setOffer = (i, patch) => { const a = [...offers]; a[i] = { ...a[i], ...patch }; setF({ ...f, loyalty_offers: a }); };
+  const addOffer = () => setF({ ...f, loyalty_offers: [...offers, { id: `o${Date.now()}`, title: "Nouvelle offre", discount_type: "percent", discount_value: 10, product_ids: [], tiers: [], enabled: true }] });
+  const delOffer = (i) => setF({ ...f, loyalty_offers: offers.filter((_, x) => x !== i) });
 
   const save = async () => {
     setBusy(true);
     try {
       await api.put("/settings", {
         loyalty_enabled: f.loyalty_enabled, loyalty_points_per_100da: Number(f.loyalty_points_per_100da) || 1,
-        loyalty_tiers: tiers.map((t) => ({ name: t.name, min: Number(t.min) || 0, perks: (t.perks || []).filter((p) => p && p.trim()) })),
+        loyalty_tiers: tiers.map((t) => ({ name: t.name, min: Number(t.min) || 0, perks: (t.perks || []).filter((p) => p && p.trim()), gifts: (t.gifts || []).filter((g) => g.name && g.name.trim()) })),
         loyalty_rewards: rewards.map((r) => ({ ...r, points: Number(r.points) || 0, value: Number(r.value) || 0 })),
+        loyalty_offers: offers.map((o) => ({ id: o.id, title: o.title, discount_type: o.discount_type, discount_value: Number(o.discount_value) || 0, product_ids: o.product_ids || [], tiers: o.tiers || [], enabled: o.enabled !== false })),
         referral_enabled: f.referral_enabled,
         referral_referrer_points: Number(f.referral_referrer_points) || 0,
         referral_referee_points: Number(f.referral_referee_points) || 0,
@@ -1369,6 +1404,30 @@ function LoyaltyAdminPanel() {
                   ))}
                   <button onClick={() => setTier(i, { perks: [...(t.perks || []), "Nouvel avantage"] })} data-testid={`tier-${i}-perk-add`} className="flex items-center gap-1.5 text-mint-700 text-xs font-semibold"><Plus className="w-3.5 h-3.5" /> Ajouter un avantage</button>
                 </div>
+                <div className="mt-3 pt-3 border-t border-mint-50">
+                  <div className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1.5"><Gift className="w-3.5 h-3.5 text-mint-600" /> Cadeaux offerts pour ce statut</div>
+                  <div className="space-y-2 mb-2">
+                    {(t.gifts || []).map((g, j) => (
+                      <div key={g.id || j} className="flex items-center gap-2 bg-mint-50/40 rounded-xl p-2" data-testid={`tier-${i}-gift-${j}`}>
+                        {g.type === "product" ? (
+                          <>
+                            {g.image && <img src={mediaUrl(g.image)} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0" />}
+                            <span className="flex-1 text-sm min-w-0"><span className="line-clamp-1">{g.name}</span><span className="text-[11px] text-slate-400">Produit du catalogue</span></span>
+                          </>
+                        ) : (
+                          <>
+                            <div className="shrink-0"><ImageUpload value={g.image} onChange={(url) => setGift(i, j, { image: url })} /></div>
+                            <input value={g.name} onChange={(e) => setGift(i, j, { name: e.target.value })} placeholder="Nom du cadeau exclusif" className={`${inp} flex-1`} data-testid={`tier-${i}-gift-name-${j}`} />
+                          </>
+                        )}
+                        <button onClick={() => delGift(i, j)} className="text-slate-400 hover:text-red-500 shrink-0" data-testid={`tier-${i}-gift-del-${j}`}><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    ))}
+                    {(t.gifts || []).length === 0 && <p className="text-xs text-slate-400">Aucun cadeau pour ce statut.</p>}
+                  </div>
+                  <GiftProductAdd onAdd={(p) => addProductGift(i, p)} />
+                  <button onClick={() => addCustomGift(i)} data-testid={`tier-${i}-gift-add-custom`} className="flex items-center gap-1.5 text-mint-700 text-xs font-semibold mt-2"><Plus className="w-3.5 h-3.5" /> Ajouter un cadeau exclusif (hors catalogue)</button>
+                </div>
               </div>
             </div>
           ))}
@@ -1393,6 +1452,42 @@ function LoyaltyAdminPanel() {
             </div>
           ))}
           <button onClick={addRw} className="flex items-center gap-1.5 text-mint-700 text-sm font-semibold" data-testid="reward-add"><Plus className="w-4 h-4" /> Ajouter une récompense</button>
+        </div>
+      </div>
+
+      <div>
+        <h4 className="font-semibold text-sm mb-2 flex items-center gap-1.5"><Ticket className="w-4 h-4 text-mint-600" /> Offres exclusives par statut</h4>
+        <p className="text-xs text-slate-500 mb-3">Réductions sur des produits, visibles et applicables uniquement par les membres des statuts sélectionnés.</p>
+        <div className="space-y-3">
+          {offers.map((o, i) => (
+            <div key={o.id} className="border border-mint-100 rounded-xl p-3 space-y-2" data-testid={`offer-row-${i}`}>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={o.enabled !== false} onChange={(e) => setOffer(i, { enabled: e.target.checked })} className="accent-mint-600 w-4 h-4" title="Activer" data-testid={`offer-enabled-${i}`} />
+                <input value={o.title} onChange={(e) => setOffer(i, { title: e.target.value })} placeholder="Titre de l'offre" className={`${inp} flex-1`} data-testid={`offer-title-${i}`} />
+                <button onClick={() => delOffer(i)} className="text-slate-400 hover:text-red-500 shrink-0"><Trash2 className="w-4 h-4" /></button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <select value={o.discount_type} onChange={(e) => setOffer(i, { discount_type: e.target.value })} className={`${inp} w-40`} data-testid={`offer-type-${i}`}>
+                  <option value="percent">Réduction (%)</option>
+                  <option value="fixed">Réduction (DA)</option>
+                </select>
+                <input type="number" min="0" value={o.discount_value} onChange={(e) => setOffer(i, { discount_value: e.target.value })} placeholder="Valeur" className={`${inp} w-28`} data-testid={`offer-value-${i}`} />
+                <div className="flex items-center gap-2 ml-auto">
+                  {tiers.map((t) => (
+                    <label key={t.name} className="flex items-center gap-1 text-xs font-medium">
+                      <input type="checkbox" checked={(o.tiers || []).includes(t.name)} onChange={(e) => { const set = new Set(o.tiers || []); e.target.checked ? set.add(t.name) : set.delete(t.name); setOffer(i, { tiers: [...set] }); }} className="accent-mint-600 w-4 h-4" data-testid={`offer-${i}-tier-${t.name}`} />
+                      {t.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-medium text-slate-500 mb-1">Produits concernés</div>
+                <ComplementarySelector value={o.product_ids} onChange={(ids) => setOffer(i, { product_ids: ids })} />
+              </div>
+            </div>
+          ))}
+          <button onClick={addOffer} className="flex items-center gap-1.5 text-mint-700 text-sm font-semibold" data-testid="offer-add"><Plus className="w-4 h-4" /> Ajouter une offre exclusive</button>
         </div>
       </div>
 
@@ -1544,8 +1639,8 @@ function SettingsPanel() {
         </details>
       </div>
       <div>
-        <h3 className="font-display font-bold text-lg mb-1">Thème saisonnier</h3>
-        <p className="text-sm text-slate-500 mb-3">Change la palette de couleurs du site selon la saison.</p>
+        <h3 className="font-display font-bold text-lg mb-1">Apparence & Thèmes</h3>
+        <p className="text-sm text-slate-500 mb-3">Change la palette de couleurs du site. Les combinaisons ci-dessous sont modifiables.</p>
         <div className="grid sm:grid-cols-2 gap-3">
           <L label="Mode">
             <select value={f.theme_mode || "auto"} onChange={(e) => set("theme_mode", e.target.value)} className={inp} data-testid="theme-mode">
@@ -1553,23 +1648,44 @@ function SettingsPanel() {
               <option value="manual">Manuel (choix fixe)</option>
             </select>
           </L>
-          <L label="Thème (mode manuel)">
+          <L label="Thème actif (mode manuel)">
             <select value={f.theme_manual || "spring"} onChange={(e) => set("theme_manual", e.target.value)} disabled={(f.theme_mode || "auto") !== "manual"} className={`${inp} disabled:opacity-50`} data-testid="theme-manual">
-              <option value="spring">Printemps (vert)</option>
-              <option value="summer">Été (turquoise)</option>
-              <option value="autumn">Automne (orange)</option>
-              <option value="winter">Hiver (bleu)</option>
-              <option value="rose">Rose poudré</option>
-              <option value="mauve">Mauve pâle</option>
-              <option value="gold">Doré</option>
-              <option value="noir">Noir</option>
+              <optgroup label="Saisons">
+                <option value="spring">Printemps (vert)</option>
+                <option value="summer">Été (turquoise)</option>
+                <option value="autumn">Automne (orange)</option>
+                <option value="winter">Hiver (bleu)</option>
+              </optgroup>
+              <optgroup label="Combinaisons">
+                {(f.theme_presets || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </optgroup>
             </select>
           </L>
         </div>
-        <div className="flex flex-wrap gap-3 mt-3">
-          {[["spring","#16A34A"],["summer","#0891B2"],["autumn","#EA580C"],["winter","#2563EB"],["rose","#DB2777"],["mauve","#7C3AED"],["gold","#B07D1C"],["noir","#27272A"]].map(([name,c]) => (
-            <span key={name} className="flex items-center gap-1.5 text-xs text-slate-500 capitalize"><span className="w-4 h-4 rounded-full border border-slate-200" style={{background:c}} />{name}</span>
-          ))}
+
+        <div className="mt-4">
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Combinaisons de couleurs (2 couleurs chacune)</div>
+          <div className="space-y-2">
+            {(f.theme_presets || []).map((p, i) => {
+              const setP = (patch) => { const a = [...(f.theme_presets || [])]; a[i] = { ...a[i], ...patch }; set("theme_presets", a); };
+              const active = (f.theme_mode || "auto") === "manual" && (f.theme_manual || "") === p.id;
+              return (
+                <div key={p.id} className={`flex items-center gap-2 rounded-xl p-2 border ${active ? "border-mint-400 bg-mint-50/50" : "border-slate-100"}`} data-testid={`theme-preset-${i}`}>
+                  <div className="flex -space-x-1 shrink-0">
+                    <span className="w-6 h-6 rounded-full border-2 border-white shadow" style={{ background: p.accent }} />
+                    <span className="w-6 h-6 rounded-full border-2 border-white shadow" style={{ background: p.bg }} />
+                  </div>
+                  <input value={p.name} onChange={(e) => setP({ name: e.target.value })} className={`${inp} flex-1 min-w-[120px]`} data-testid={`theme-preset-name-${i}`} />
+                  <input type="color" value={p.accent} onChange={(e) => setP({ accent: e.target.value })} className="w-9 h-9 rounded-lg border border-slate-200 cursor-pointer shrink-0" title="Couleur principale" data-testid={`theme-preset-accent-${i}`} />
+                  <input type="color" value={p.bg} onChange={(e) => setP({ bg: e.target.value })} className="w-9 h-9 rounded-lg border border-slate-200 cursor-pointer shrink-0" title="Couleur de fond" data-testid={`theme-preset-bg-${i}`} />
+                  <button onClick={() => { set("theme_mode", "manual"); set("theme_manual", p.id); }} className={`shrink-0 px-3 py-2 rounded-lg text-xs font-semibold ${active ? "bg-mint-600 text-white" : "bg-white border border-mint-200 text-mint-700 hover:border-mint-400"}`} data-testid={`theme-preset-apply-${i}`}>{active ? "Actif" : "Appliquer"}</button>
+                  <button onClick={() => set("theme_presets", (f.theme_presets || []).filter((_, x) => x !== i))} className="text-slate-400 hover:text-red-500 shrink-0" data-testid={`theme-preset-del-${i}`}><Trash2 className="w-4 h-4" /></button>
+                </div>
+              );
+            })}
+            <button onClick={() => set("theme_presets", [...(f.theme_presets || []), { id: `t${Date.now()}`, name: "Nouvelle combinaison", accent: "#E8B4B8", bg: "#FDF8F5" }])} data-testid="theme-preset-add" className="flex items-center gap-1.5 text-mint-700 text-sm font-semibold"><Plus className="w-4 h-4" /> Ajouter une combinaison</button>
+          </div>
+          <p className="text-xs text-slate-400 mt-2">Astuce : cliquez « Appliquer » puis « Enregistrer les paramètres » pour activer une combinaison sur tout le site.</p>
         </div>
       </div>
 

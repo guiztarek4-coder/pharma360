@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Truck, CreditCard, ShoppingBag, Store, MapPin, Tag, Check, MessageCircle, ShieldCheck, LogIn, User, Eye, EyeOff } from "lucide-react";
+import { Truck, CreditCard, ShoppingBag, Store, MapPin, Tag, Check, MessageCircle, ShieldCheck, LogIn, User, Eye, EyeOff, Gift } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatDA, formatApiError, mediaUrl } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
@@ -19,6 +19,7 @@ export default function Checkout() {
   const [promo, setPromo] = useState(null);
   const [giftcardInput, setGiftcardInput] = useState("");
   const [giftcard, setGiftcard] = useState(null);
+  const [giftCodeInput, setGiftCodeInput] = useState("");
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [notRobot, setNotRobot] = useState(false);
   const [wilayas, setWilayas] = useState([]);
@@ -150,6 +151,7 @@ export default function Checkout() {
         delivery_method: deliveryMethod,
         promo_code: promo ? promo.code : "",
         giftcard_code: giftcard ? giftcard.code : "",
+        gift_code: giftCodeInput.trim(),
       });
       clear();
       if (payment === "baridimob") {
@@ -354,6 +356,14 @@ export default function Checkout() {
                 <button type="button" onClick={applyGiftcard} data-testid="giftcard-apply" className="px-4 py-2 rounded-xl bg-slate-dark text-white text-sm font-semibold">OK</button>
               </div>
               {giftcard && <div className="text-xs text-mint-700 mt-1.5 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> E-carte {giftcard.code} · solde {formatDA(giftcard.balance)}</div>}
+              {user && (
+                <>
+                  <label className="block text-sm font-medium text-slate-600 mb-1.5 mt-3 flex items-center gap-1.5"><Gift className="w-3.5 h-3.5" /> Code cadeau fidélité</label>
+                  <input value={giftCodeInput} onChange={(e) => setGiftCodeInput(e.target.value)} placeholder="Ex : CADEAU-XXXXXX" data-testid="gift-code-input"
+                    className="w-full px-3 py-2 rounded-xl border border-mint-200 text-sm outline-none focus:ring-2 focus:ring-mint-500 uppercase" />
+                  {giftCodeInput.trim() && <div className="text-xs text-mint-700 mt-1.5 flex items-center gap-1"><Gift className="w-3.5 h-3.5" /> Votre cadeau sera ajouté gratuitement à la commande</div>}
+                </>
+              )}
             </div>
 
             <div className="space-y-2 text-sm border-t border-mint-100 pt-4">

@@ -129,8 +129,8 @@ function Dashboard() {
   useEffect(() => { api.get("/account/giftcards").then((r) => setEcards(r.data)).catch(() => {}); }, []);
 
   const [tier, setTier] = useState(null);
-  useEffect(() => { api.get("/loyalty/me").then((r) => setTier(r.data?.tier?.name || null)).catch(() => {}); }, []);
-  const tierStyle = { BRONZE: "bg-amber-100 text-amber-800 border-amber-300", Silver: "bg-slate-100 text-slate-600 border-slate-300", Gold: "bg-yellow-100 text-yellow-700 border-yellow-400" };
+  useEffect(() => { api.get("/loyalty/me").then((r) => setTier(r.data?.enabled ? (r.data?.tier?.name || "__new__") : null)).catch(() => {}); }, []);
+  const tierStyle = { BRONZE: "bg-amber-100 text-amber-800 border-amber-300", Silver: "bg-slate-100 text-slate-600 border-slate-300", Gold: "bg-yellow-100 text-yellow-700 border-yellow-400", __new__: "bg-slate-100 text-slate-500 border-slate-200" };
 
   const saveAddr = async () => {
     if (!addr.full_name || !addr.phone || !addr.street) { toast.error("Champs requis manquants"); return; }
@@ -150,8 +150,8 @@ function Dashboard() {
             <h1 className="font-display font-extrabold text-xl sm:text-2xl">Bonjour, {user.first_name}</h1>
             <p className="text-slate-500 text-sm">{user.email || user.phone}</p>
             {tier && (
-              <span data-testid="profile-tier-badge" className={`inline-flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full text-xs font-bold border ${tierStyle[tier] || tierStyle.BRONZE}`}>
-                <Crown className="w-3.5 h-3.5" /> Statut {tier}
+              <span data-testid="profile-tier-badge" className={`inline-flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full text-xs font-bold border ${tierStyle[tier] || tierStyle.__new__}`}>
+                <Crown className="w-3.5 h-3.5" /> {tier === "__new__" ? "Nouveau membre" : `Statut ${tier}`}
               </span>
             )}
           </div>

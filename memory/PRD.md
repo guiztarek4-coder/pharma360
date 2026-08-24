@@ -125,6 +125,16 @@ Site e-commerce de parapharmacie "Pharma360" basé en Algérie, inspiré de phar
 - **Nouveaux thèmes** : rose (Rose poudré), mauve (Mauve pâle), gold (Doré), noir (Noir) ajoutés au sélecteur Apparence en plus des 4 saisons. Classes CSS `theme-rose/mauve/gold/noir`.
 - Tests : backend 10/10, frontend 100% sur les 6 flux (iteration_20).
 
+## Implemented (2026-06 — iteration 21 : Fidélité avancée + Thèmes 2 couleurs)
+- **Bug statut corrigé** : `_loyalty_tier` renvoie `null` si les points sont sous le seuil du plus petit palier. Le statut est calculé en direct → modifier un seuil dans l'admin réévalue TOUS les clients instantanément. Badge « Nouveau membre » (neutre) sous le seuil.
+- **Cadeaux par statut** : chaque palier (BRONZE/Silver/Gold) a sa propre liste de cadeaux — produits du catalogue OU cadeaux exclusifs (nom+photo). CRUD dans Admin > Fidélité (`gifts` dans `loyalty_tiers`).
+- **Félicitations + choix cadeau** : page Fidélité affiche « Félicitations ! Vous êtes {statut} » avec les cadeaux à choisir. `POST /api/loyalty/claim-gift`.
+- **1 cadeau par statut (définitif)** : `user.gift_claims` empêche toute nouvelle réclamation pour un palier déjà réclamé. Génère un code unique `CADEAU-XXXX` (single-use, lié au client).
+- **Code cadeau au checkout** : champ « Code cadeau fidélité » (`/commande`) → ajoute le cadeau en ligne gratuite (prix 0) et consomme le code.
+- **Offres exclusives par statut** : `settings.loyalty_offers` = [{title, discount_type, discount_value, product_ids, tiers}]. CRUD admin. Le client ne voit que les offres de son statut ; la réduction est appliquée automatiquement au checkout pour les membres éligibles.
+- **8 combinaisons de thèmes (2 couleurs)** éditables (nom + accent + fond) dans Admin > Paramètres > Apparence. Palette dérivée de l'accent appliquée partout via variables CSS calculées (`applyPresetVars`). + 4 thèmes saisonniers conservés.
+- Tests : backend 100% (curl iteration 21), frontend 100% (7/7 flux — iteration_21).
+
 ## Capacité (réponse client)
 - Produits : aucune limite pratique (dizaines/centaines de milliers). Clients : illimité en pratique. MongoDB évolue avec le trafic.
 
