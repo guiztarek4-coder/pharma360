@@ -9,7 +9,7 @@ const inp = "w-full px-3 py-2 rounded-xl border border-mint-200 text-sm outline-
 function flattenVisible(nodes, expanded, depth, acc) {
   (nodes || []).forEach((n) => {
     const kids = n.children || [];
-    acc.push({ id: n.id, name: n.name, depth, hasKids: kids.length > 0 });
+    acc.push({ id: n.id, name: n.label ?? n.name ?? "", depth, hasKids: kids.length > 0 });
     if (kids.length > 0 && expanded[n.id]) flattenVisible(kids, expanded, depth + 1, acc);
   });
   return acc;
