@@ -1,0 +1,150 @@
+{
+  "project_info": {
+    "name": "L'olivier",
+    "subtitle": "Parapharmacie Botanique & High-Tech Science",
+    "app_type": "e-commerce parapharmacy full-stack site (landing_page + catalog + dashboard hybrid)",
+    "language": "French",
+    "theme_default": "Vert olive / naturel (Olive Green & Organic Warmth)"
+  },
+  "brand_identity": {
+    "name": "L'olivier",
+    "tagline": "L'Excellence Botanique au Service de Votre Santé",
+    "manifesto_title": "Notre Manifeste Botanique",
+    "contact_details": {
+      "phone_primary": "0770777685",
+      "phone_secondary": "0560285199",
+      "google_maps_url": "https://maps.app.goo.gl/G778XwjzYi4cyX8ZA",
+      "instagram_handle": "@pharmacie_l.olivier_said_hamdi",
+      "instagram_url": "https://www.instagram.com/pharmacie_l.olivier_said_hamdi",
+      "opening_hours": "7j/7 - 24h/24"
+    }
+  },
+  "typography": {
+    "headline_font": "Cormorant Garamond, serif",
+    "headline_description": "Editorial, elegant French luxury typography for primary titles and manifesto chapters",
+    "body_font": "Plus Jakarta Sans, sans-serif",
+    "body_description": "Clean, highly legible geometric sans for product cards, specifications, and back-office UI",
+    "accent_font": "JetBrains Mono, monospace",
+    "accent_description": "Precise clinical data, member prices, loyalty points, coordinates, and batch codes",
+    "hierarchy_rules": {
+      "h1_hero": "text-4xl sm:text-5xl lg:text-6xl font-serif tracking-tight leading-[1.05]",
+      "h2_section": "text-2xl sm:text-3xl lg:text-4xl font-serif tracking-tight",
+      "h3_card": "text-xl sm:text-2xl font-serif",
+      "body_regular": "text-base font-sans text-stone-700 dark:text-stone-300 leading-relaxed",
+      "badge_mono": "text-xs font-mono uppercase tracking-[0.2em]"
+    }
+  },
+  "colors": {
+    "palette_name": "Olive Botanique & Warm Stone",
+    "primary": {
+      "base": "#3E4E30",
+      "hover": "#2E3B23",
+      "light": "#60744B",
+      "pale": "#EAF0E6"
+    },
+    "secondary": {
+      "terracotta": "#C86D51",
+      "gold_accent": "#D4A359",
+      "sage_soft": "#98A886"
+    },
+    "neutral": {
+      "dark_olive_obsidian": "#181C14",
+      "slate_dark": "#232820",
+      "warm_bone": "#FAF8F5",
+      "warm_sand": "#F3EFEA",
+      "muted_stone": "#73786D"
+    },
+    "tiers": {
+      "bronze": "#A87040",
+      "silver": "#94A3B8",
+      "gold": "#D4A359"
+    },
+    "dark_mode_rules": {
+      "background": "#121510",
+      "card_background": "#1A1F17",
+      "border": "#2E362A"
+    }
+  },
+  "design_archetype": {
+    "archetype_1": "ORGANIC & EARTHY (Trust, Growth, Botanical Purity)",
+    "archetype_2": "SWISS & HIGH-CONTRAST (Clinical Precision & Data Clarity)",
+    "fusion_note": "A luxury botanical fusion: editorial French apothecary meets high-precision modern e-commerce."
+  },
+  "key_features_and_components": {
+    "navigation_header": "Glassmorphic floating navbar with brand logo, 5 primary links, user auth avatar, loyalty points chip, favorites count (heart), cart drawer trigger, and theme toggle.",
+    "kinetic_hero": "Awwwards-level split hero with masked line-by-line reveal, floating olive botanical imagery, live status badge 'Ouvert 7j/7 - 24h/24', and quick category jump triggers.",
+    "slow_editorial_marquee": "Low contrast, slow-scrolling botanical ticker with organic separation icons highlighting key promises: 'Produits 100% Certifiés', 'Conseil Pharmacien 24/7', 'Livraison Express', 'Programme Privilège'.",
+    "numbered_manifesto": "3-chapter story layout ('01. Sourcing Naturel', '02. Rigueur Pharmacologique', '03. Engagement Local') with asymmetrical image-text grid.",
+    "product_catalog": "Filterable grid (Soins Visage, Dermatologie, Hygiène & Corps, Compléments, Bébés) showing standard price & discounted Member Price (Prix Membre Privilège), tier badges, and quick favorite toggle.",
+    "loyalty_dashboard": "Bronze / Silver / Gold tier progression bar, points calculator, unlocked gift catalog, and tier-exclusive discounts.",
+    "live_chat_widget": "Bottom-right real-time client-admin chat interface with automated welcome message, quick FAQ buttons, and active status indicator.",
+    "admin_back_office": "Full management suite: stock overview, order tracking, product bulk selection by category, revenue analytics charts, and real-time Theme Color Customizer (Olive, Terracotta, Sage, Midnight).",
+    "favorites_drawer": "Quick sliding panel showing saved products with 1-click 'Tout ajouter au panier'.",
+    "footer": "5-column comprehensive footer (A propos, Catégories, Programme Fidélité, Contact & Direct, Légal) with direct links to Google Maps, Instagram, and phones."
+  },
+  "image_urls": {
+    "hero_botanical_main": "https://images.unsplash.com/photo-1636634244465-292784bf6689?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "hero_skincare_display": "https://images.unsplash.com/photo-1779117691346-5de09d89a73f?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "manifesto_chapter_1": "https://images.pexels.com/photos/8100779/pexels-photo-8100779.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+    "manifesto_chapter_2": "https://images.unsplash.com/photo-1782034493928-d8410275cfcd?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "products": [
+      {
+        "id": "prod-1",
+        "name": "Sérum Anti-Âge à l'Extrait d'Olivier",
+        "category": "Soins Visage",
+        "price": 34.90,
+        "member_price": 27.92,
+        "image": "https://images.unsplash.com/photo-1782521193029-955f4c1c4225?crop=entropy&cs=srgb&fm=jpg&q=85"
+      },
+      {
+        "id": "prod-2",
+        "name": "Huile Botanique Réparatrice Bio",
+        "category": "Dermatologie",
+        "price": 28.50,
+        "member_price": 22.80,
+        "image": "https://images.unsplash.com/photo-1782687633966-1ceb2a3fdf0f?crop=entropy&cs=srgb&fm=jpg&q=85"
+      },
+      {
+        "id": "prod-3",
+        "name": "Elixir Régénérant Rétinol & Olive",
+        "category": "Soins Visage",
+        "price": 42.00,
+        "member_price": 33.60,
+        "image": "https://images.unsplash.com/photo-1768254636839-9a2d2619c861?crop=entropy&cs=srgb&fm=jpg&q=85"
+      },
+      {
+        "id": "prod-4",
+        "name": "Baume Botanique Apaisant Peaux Sensibles",
+        "category": "Dermatologie",
+        "price": 19.90,
+        "member_price": 15.90,
+        "image": "https://images.pexels.com/photos/7796377/pexels-photo-7796377.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+      },
+      {
+        "id": "prod-5",
+        "name": "Soin Purifiant Feuilles d'Olivier & Thé Vert",
+        "category": "Hygiène & Corps",
+        "price": 24.00,
+        "member_price": 19.20,
+        "image": "https://images.unsplash.com/photo-1781948237644-4bb872b37c79?crop=entropy&cs=srgb&fm=jpg&q=85"
+      },
+      {
+        "id": "prod-6",
+        "name": "Complexe Phytothérapie Vitalité & Immunité",
+        "category": "Compléments",
+        "price": 22.50,
+        "member_price": 18.00,
+        "image": "https://images.unsplash.com/photo-1679570982824-6a230e63025b?crop=entropy&cs=srgb&fm=jpg&q=85"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Follow French language exclusively for the frontend UI text.",
+    "Implement the exact brand details for L'olivier (Phones 0770777685 & 0560285199, Maps link https://maps.app.goo.gl/G778XwjzYi4cyX8ZA, Instagram @pharmacie_l.olivier_said_hamdi, hours 7j/7 24h/24).",
+    "Use framer-motion for kinetic load reveals, smooth transitions, and subtle hover lifts.",
+    "Ensure every interactive button, tab, card, input, modal trigger, and link has a explicit data-testid attribute in kebab-case.",
+    "Provide live client-admin chat simulation with instant automated greetings and admin reply toggle.",
+    "Provide real-time admin back-office with dynamic theme color swatches that alter global CSS variables on click.",
+    "Build a 5-column footer with precise branding, phone triggers, Google Maps direct link, Instagram link, and 24/7 indicator."
+  ]
+}

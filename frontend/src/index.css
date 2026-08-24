@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --brand: #3E4E30;
+    --brand-hover: #2E3B23;
+    --brand-pale: #EAF0E6;
+    --accent: #C86D51;
+    --background: 38 33% 97%;
+    --foreground: 80 14% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 80 14% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 80 14% 9%;
+    --primary: 96 25% 25%;
+    --primary-foreground: 38 33% 97%;
+    --secondary: 40 20% 94%;
+    --secondary-foreground: 80 14% 9%;
+    --muted: 40 20% 94%;
+    --muted-foreground: 75 5% 45%;
+    --accent-hsl: 14 50% 55%;
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 40 14% 88%;
+    --input: 40 14% 88%;
+    --ring: 96 25% 25%;
+    --radius: 0.75rem;
+}
+
+* {
+    border-color: hsl(var(--border));
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+html.lenis, html.lenis body {
+    height: auto;
+}
+
+.lenis.lenis-smooth {
+    scroll-behavior: auto !important;
+}
+
+body {
+    margin: 0;
+    font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+    background-color: #FAF8F5;
+    color: #181C14;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+    background: var(--brand);
+    color: #FAF8F5;
+}
+
+@layer components {
+    .btn-brand {
+        @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold tracking-wide transition-all duration-300;
+        background: var(--brand);
+        color: #FAF8F5;
+    }
+    .btn-brand:hover {
+        background: var(--brand-hover);
+        transform: translateY(-2px);
+        box-shadow: 0 12px 28px -10px color-mix(in srgb, var(--brand) 55%, transparent);
+    }
+    .btn-outline {
+        @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold tracking-wide transition-all duration-300 border;
+        border-color: var(--brand);
+        color: var(--brand);
+    }
+    .btn-outline:hover {
+        background: var(--brand);
+        color: #FAF8F5;
+        transform: translateY(-2px);
+    }
+    .badge-mono {
+        @apply text-[11px] font-mono uppercase tracking-[0.22em];
+    }
+    .card-lift {
+        @apply transition-all duration-500;
+    }
+    .card-lift:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 24px 48px -20px rgba(24, 28, 20, 0.25);
+    }
+    .input-field {
+        @apply w-full rounded-xl border bg-white px-4 py-3 text-sm outline-none transition-all duration-300;
+        border-color: #E2DED6;
+    }
+    .input-field:focus {
+        border-color: var(--brand);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 15%, transparent);
+    }
+}
+
+/* Slow editorial marquee */
+@keyframes marquee-scroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+}
+.marquee-track {
+    display: flex;
+    width: max-content;
+    animation: marquee-scroll 42s linear infinite;
+}
+.marquee-track:hover {
+    animation-play-state: paused;
+}
+
+/* Grain overlay */
+.grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Pulsing open dot */
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(0.8); }
+}
+.pulse-dot {
+    animation: pulse-dot 1.8s ease-in-out infinite;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #F3EFEA; }
+::-webkit-scrollbar-thumb { background: var(--brand); border-radius: 8px; }
+
+@layer base {
+    [data-debug-wrapper="true"] {
+        display: contents !important;
+    }
+    [data-debug-wrapper="true"] > * {
+        margin: inherit;
+        padding: inherit;
+        gap: inherit;
+        border: inherit;
+    }
+}
