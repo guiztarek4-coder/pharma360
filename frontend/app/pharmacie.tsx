@@ -37,6 +37,10 @@ export default function Pharmacie() {
   const tourUrl = settings?.virtual_tour_url as string | undefined;
 
   const openMaps = () => {
+    if (settings?.maps_link) {
+      Linking.openURL(settings.maps_link);
+      return;
+    }
     const q = encodeURIComponent(address || "Pharma360 Alger");
     const url = Platform.select({ ios: `http://maps.apple.com/?q=${q}`, android: `geo:0,0?q=${q}`, default: `https://maps.google.com/?q=${q}` });
     Linking.openURL(url as string);
@@ -62,6 +66,7 @@ export default function Pharmacie() {
           <InfoRow icon="map-pin" label="Adresse" value={address} />
           <InfoRow icon="clock" label="Horaires" value={settings?.horaires} />
           <InfoRow icon="phone" label="Téléphone" value={settings?.phone} />
+          <InfoRow icon="mail" label="Email" value={settings?.email} />
           <InfoRow icon="truck" label="Zone de livraison" value={settings?.delivery_zone} />
         </View>
 

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { AppState } from "react-native";
 import { api } from "@/src/lib/api";
 import { buildPalette, DEFAULT_PALETTE, Palette } from "./palette";
 
@@ -51,6 +52,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     refresh();
+    // Re-pull settings/theme whenever the app returns to the foreground,
+    // so admin changes (theme, footer, hero, fees, loyalty config…) sync.
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") refresh();
+    });
+    return () => sub.remove();
   }, [refresh]);
 
   return <ThemeCtx.Provider value={{ colors, settings, loading, refresh }}>{children}</ThemeCtx.Provider>;

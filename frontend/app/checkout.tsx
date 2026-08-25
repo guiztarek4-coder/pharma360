@@ -46,7 +46,7 @@ export default function Checkout() {
   const [commune, setCommune] = useState("");
   const [street, setStreet] = useState("");
   const [delivery, setDelivery] = useState<"domicile" | "relais">("domicile");
-  const [payment, setPayment] = useState<"cod" | "baridimob">("cod");
+  const [payment, setPayment] = useState<"cod" | "baridimob" | "card">("cod");
   const [wilayaSheet, setWilayaSheet] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -186,6 +186,9 @@ export default function Checkout() {
             ) : null}
             {settings?.payment_baridimob_enabled ? (
               <OptionTile testID="pay-baridimob" active={payment === "baridimob"} onPress={() => setPayment("baridimob")} icon="credit-card" title="BaridiMob" subtitle="Paiement mobile" />
+            ) : null}
+            {settings?.payment_card_enabled ? (
+              <OptionTile testID="pay-card" active={payment === "card"} onPress={() => setPayment("card")} icon="credit-card" title="Carte bancaire" subtitle="CIB / Edahabia" />
             ) : null}
           </View>
         </Section>

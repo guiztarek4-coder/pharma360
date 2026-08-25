@@ -1,9 +1,9 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { View, ScrollView, Pressable, RefreshControl, TextInput, StyleSheet, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/src/theme/theme";
 import { Txt, Skeleton } from "@/src/components/ui";
@@ -54,11 +54,14 @@ function Carousel({ products, loading }: { products?: Product[]; loading: boolea
 }
 
 export default function Home() {
-  const { colors, settings } = useTheme();
+  const { colors, settings, refresh: refreshSettings } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { width } = useWindowDimensions();
+
+  // Pull fresh settings/theme each time Home is focused
+  useFocusEffect(useCallback(() => { refreshSettings(); }, [refreshSettings]));
 
   const promos = useFetch<Product[]>("/products", { on_promo: 1, limit: 8 });
   const news = useFetch<Product[]>("/products", { is_new: 1, limit: 8 });
@@ -69,9 +72,13 @@ export default function Home() {
 
   const refreshing = false;
   const onRefresh = () => {
+    refreshSettings();
     promos.reload();
     news.reload();
     featured.reload();
+    cats.reload();
+    brands.reload();
+    blog.reload();
   };
 
   const catW = (width - 16 * 2 - 12 * 2) / 3;
@@ -136,6 +143,11 @@ export default function Home() {
             <Txt family="display" weight={700} size={22} color="#fff" style={{ lineHeight: 27 }}>
               {settings?.hero_title || "Prenez soin de votre peau & santé"}
             </Txt>
+            {settings?.hero_subtitle ? (
+              <Txt size={13} color="rgba(255,255,255,0.92)" style={{ marginTop: 4 }} numberOfLines={2}>
+                {settings.hero_subtitle}
+              </Txt>
+            ) : null}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 }}>
               <View style={{ backgroundColor: "#fff", borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Txt family="display" weight={700} size={13} color={colors.text}>
@@ -164,6 +176,7 @@ export default function Home() {
         </View>
 
         {/* Loyalty teaser */}
+        {settings?.loyalty_enabled !== false ? (
         <Pressable onPress={() => router.push("/fidelite")} style={{ marginHorizontal: 16, marginBottom: 24, borderRadius: 18, overflow: "hidden" }}>
           <LinearGradient colors={[colors.primary, colors.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ padding: 18, flexDirection: "row", alignItems: "center", gap: 14 }}>
             <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}>
@@ -180,6 +193,7 @@ export default function Home() {
             <Feather name="chevron-right" size={22} color="#fff" />
           </LinearGradient>
         </Pressable>
+        ) : null}
 
         {/* Nos Offres */}
         <View style={{ marginBottom: 24 }}>
@@ -240,6 +254,7 @@ export default function Home() {
 
         {/* Gift banners */}
         <View style={{ flexDirection: "row", gap: 12, paddingHorizontal: 16, marginBottom: 24 }}>
+          {settings?.giftcard_enabled !== false ? (
           <Pressable onPress={() => router.push("/carte-cadeau")} style={{ flex: 1, borderRadius: 16, overflow: "hidden" }}>
             <LinearGradient colors={[colors.primary, colors.primaryDark]} style={{ padding: 16, height: 110, justifyContent: "space-between" }}>
               <Feather name="gift" size={22} color="#fff" />
@@ -248,6 +263,7 @@ export default function Home() {
               </Txt>
             </LinearGradient>
           </Pressable>
+          ) : null}
           <Pressable onPress={() => router.push("/idees-cadeaux")} style={{ flex: 1, borderRadius: 16, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: 16, height: 110, justifyContent: "space-between" }}>
             <Feather name="package" size={22} color={colors.primary} />
             <Txt family="display" weight={700} size={14}>

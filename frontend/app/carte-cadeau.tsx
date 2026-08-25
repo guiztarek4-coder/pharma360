@@ -111,6 +111,11 @@ export default function CarteCadeau() {
         <Field testID="giftcard-message" label="Message (optionnel)" icon="edit-2" value={message} onChangeText={setMessage} placeholder="Un petit mot…" />
 
         <Button testID="giftcard-order-btn" title="Ajouter au panier" icon="gift" size="lg" onPress={addToCart} />
+        {settings?.giftcard_terms ? (
+          <Txt size={12} color={colors.textLight} style={{ lineHeight: 18, marginTop: 4 }}>
+            {settings.giftcard_terms}
+          </Txt>
+        ) : null}
       </KeyboardAwareScrollView>
     </View>
   );

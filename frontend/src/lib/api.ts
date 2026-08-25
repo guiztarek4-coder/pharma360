@@ -49,6 +49,7 @@ async function core(path: string, opts: Opts = {}): Promise<Response> {
     method: opts.method || "GET",
     headers,
     credentials: "include",
+    cache: "no-store",
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   });
 }

@@ -1,0 +1,37 @@
+{
+  "summary": "Frontend-only regression after useFetch refactor (useFocusEffect refetch + AppState settings refresh). Mobile viewport 390x844 on preview https://pharma360-mobile.preview.emergentagent.com against LIVE API https://pharma360benak.com/api. ALL 11 targeted screens loaded correctly without red screen, without loading-stuck state, and without infinite refetch loops. Verified: Home (hero + subtitle + top-bar ticker 'Livraison rapide dans toutes les wilayas...' + fidelite teaser + gift banners + brands + blog + Footer with brand tagline & socials), Catalogue (search input debounced + chip filters), Product detail /produit/{id} with add-to-cart-btn testID, Marques, Blog, Idées cadeaux, Fidelite, Panier, Compte, Carte-cadeau, Checkout (renders without crash), Pharmacie (Email row + Itinéraire button present). Focus-refetch validated: returning Home from Catalogue triggered 11 network requests (fresh data, not stuck cache). Multi-navigation Home->Catalogue->Home->Catalogue->Home fired 26 requests then 6s idle = 0 requests → NO infinite refetch loop / no flicker. Login with app.test.1787653725@pharma360test.com/Test12345 succeeds via 'Se connecter' entry on /compte → Mon Compte shows 'App Test' + '0 points'; session persists across navigation. Only console noise = known benign 401 on guest /favorites and pointerEvents/shadow* deprecation warnings (already reported in iteration_2). No new bugs introduced by the refactor.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Guest /favorites", "issue": "GET /favorites still called without token on public screens → 401 in console (benign, UI shows empty state). Same as iteration_2, not regressed.", "affected_testIDs": []}
+    ],
+    "design_issues": [
+      {"screen": "global (web)", "issues": [
+        "Still present: 'props.pointerEvents is deprecated. Use style.pointerEvents' (react-native-web).",
+        "Still present: '\"shadow*\" style props are deprecated. Use \"boxShadow\".'",
+        "Still present: 'Animated: useNativeDriver is not supported' (expected on web)."
+      ]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_3.json"],
+  "action_items": [
+    "(Carry-over from iteration_2) Guard /favorites hydration behind an auth-token check to remove 401 noise for guests.",
+    "(Carry-over) Migrate legacy 'shadow*' style props to 'boxShadow' and 'pointerEvents' prop to style.pointerEvents to clear deprecation warnings."
+  ],
+  "critical_code_review_comments": [
+    "useFetch (src/lib/useFetch.ts) correctly uses useFocusEffect with a stable key derived from path+query, and cleans up with the active flag → no double-set-state after unmount, no runaway loop observed.",
+    "ThemeProvider (src/theme/theme.tsx) refetches /settings on AppState 'active' and Home also calls refreshSettings() in useFocusEffect → admin-driven fields (hero subtitle, ticker, footer tagline/socials, giftcard_enabled, loyalty_enabled) reflect after refocus.",
+    "api.ts already uses cache:'no-store' → no stale HTTP cache.",
+    "Home fires 6 useFetch hooks + settings refresh on focus (~7 network calls); acceptable and matches observed 8 initial + 11 on refocus. No thrashing.",
+    "Idle 6s after multiple screen transitions produced 0 additional network requests → confirms no interval/loop leak introduced by the refactor."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (external live API not in scope)", "frontend": "100% of requested regression flows (11/11 screens loaded, focus-refetch verified, no loop)"},
+  "seed_data_creation": "None. Logged in with the shared test account; did not place any order, did not create addresses, did not claim/redeem loyalty.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Regression run for the useFetch(useFocusEffect) refactor passed. Preview at https://pharma360-mobile.preview.emergentagent.com, live API https://pharma360benak.com/api. Login path on mobile: /compte → tap 'Se connecter' → the login form (login-identifier / login-password / login-submit) is on the /login screen (not directly on /compte). Do NOT place real orders. Two benign console warnings remain (pointerEvents, shadow*) — main agent to clean up in a separate pass.",
+  "rca_of_issue": "No blocking regression. The refactor (useFocusEffect + AppState refresh + cache:'no-store') behaves as intended: screens refetch on focus, settings refresh on app foreground/Home focus, and there is no infinite refetch loop (verified 6s idle after heavy navigation = 0 network deltas)."
+}

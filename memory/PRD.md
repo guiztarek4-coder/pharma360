@@ -75,6 +75,21 @@ Frontend testing agent: 16/16 flows PASS against the live API. Login OK, all new
 Non-blocking web-only console noise (guest /favorites 401, /notifications 403 for customer role,
 react-native-web pointerEvents/shadow deprecation) — UIs render correctly.
 
+## Live sync fix (2026-06 / build 3)
+User reported partial site↔app sync. Root cause: in-memory caching for the session (tab screens and
+/settings fetched once). CDN was confirmed NOT caching (cf-cache-status: DYNAMIC). Fixes:
+- `api` fetch uses `cache: "no-store"`.
+- `useFetch` refetches on every screen focus (`useFocusEffect`) → products, categories, brands, blog,
+  gift-ideas, wilayas, loyalty, member-pricing all refresh on navigation.
+- `ThemeProvider` re-pulls `/settings` on app foreground (AppState "active") and on Home focus →
+  theme/colors, footer, hero (+subtitle), top-bar messages, delivery fees, payment flags, loyalty &
+  giftcard config, CGV/privacy, virtual tour, referral all sync live.
+- Added coverage for previously-unused admin fields: hero_subtitle, tagline (footer), email + maps_link
+  (pharmacie), tiktok/whatsapp_url + whatsapp (footer socials), payment_card_enabled (checkout card
+  option), loyalty_enabled & giftcard_enabled gating, giftcard_terms.
+Tested (iteration_3): regression PASS on all 11 data screens, focus-refetch verified (fresh requests on
+tab switch), no infinite loop, login OK, coverage fields render.
+
 ## Backlog (next)
 - P1: Server-side favorites sync (/favorites) + notifications (/notifications) once desired.
 - P1: Promo code & gift card fields at checkout (/promo/validate, /giftcard/validate).

@@ -99,11 +99,11 @@ export default function Compte() {
           <Row testID="menu-favorites" icon="heart" label={`Mes favoris${ids.length ? ` (${ids.length})` : ""}`} onPress={() => router.push("/favoris")} />
           {user ? <Row testID="menu-addresses" icon="map-pin" label="Mes adresses" onPress={() => router.push("/adresses")} /> : null}
           {user ? <Row testID="menu-notifications" icon="bell" label="Notifications" onPress={() => router.push("/notifications")} /> : null}
-          <Row testID="menu-loyalty" icon="award" label="Programme de fidélité" onPress={() => router.push("/fidelite")} />
+          {settings?.loyalty_enabled !== false ? <Row testID="menu-loyalty" icon="award" label="Programme de fidélité" onPress={() => router.push("/fidelite")} /> : null}
         </View>
 
         <View style={{ marginTop: 16, backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border }}>
-          <Row testID="menu-giftcard" icon="gift" label="Cartes cadeaux" onPress={() => router.push("/carte-cadeau")} />
+          {settings?.giftcard_enabled !== false ? <Row testID="menu-giftcard" icon="gift" label="Cartes cadeaux" onPress={() => router.push("/carte-cadeau")} /> : null}
           <Row testID="menu-giftideas" icon="package" label="Idées cadeaux" onPress={() => router.push("/idees-cadeaux")} />
           <Row testID="menu-pharmacy" icon="map-pin" label="Notre pharmacie" onPress={() => router.push("/pharmacie")} />
           <Row testID="menu-blog" icon="book-open" label="Conseils & astuces" onPress={() => router.push("/blog")} />

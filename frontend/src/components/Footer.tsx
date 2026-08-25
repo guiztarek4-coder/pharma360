@@ -37,6 +37,7 @@ export function Footer() {
   const socials: { icon: keyof typeof Feather.glyphMap; url?: string }[] = [
     { icon: "instagram", url: settings.instagram && settings.instagram !== "#" ? `https://instagram.com/${(settings.instagram || "").replace(/[#@]/g, "")}` : undefined },
     { icon: "facebook", url: settings.facebook && settings.facebook !== "#" ? settings.facebook : undefined },
+    { icon: "message-circle", url: settings.whatsapp_url || (settings.whatsapp_number ? `https://wa.me/${(settings.whatsapp_number || "").replace(/[^0-9]/g, "")}` : undefined) },
   ];
 
   return (
@@ -44,6 +45,11 @@ export function Footer() {
       <Txt family="display" weight={700} size={20} color="#fff">
         {settings.brand_name || "Pharma360"}
       </Txt>
+      {settings.tagline ? (
+        <Txt size={12} color="rgba(255,255,255,0.6)" style={{ marginTop: 2 }}>
+          {settings.tagline}
+        </Txt>
+      ) : null}
       <Txt size={13} color="rgba(255,255,255,0.7)" style={{ marginTop: 8, lineHeight: 20 }}>
         {settings.footer_about}
       </Txt>
