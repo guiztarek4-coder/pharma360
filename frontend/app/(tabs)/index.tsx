@@ -12,6 +12,7 @@ import { useFetch } from "@/src/lib/useFetch";
 import { mediaUrl } from "@/src/lib/api";
 import { useAuth } from "@/src/store/auth";
 import { formatDA } from "@/src/lib/format";
+import { Footer } from "@/src/components/Footer";
 
 function SectionHeader({ title, emoji, onSeeAll }: { title: string; emoji?: string; onSeeAll?: () => void }) {
   const { colors } = useTheme();
@@ -79,6 +80,18 @@ export default function Home() {
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       {/* Sticky search header */}
       <View style={{ paddingTop: insets.top + 6, paddingBottom: 12, paddingHorizontal: 16, backgroundColor: colors.bg, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
+        {(settings?.top_bar_messages || []).length ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }} contentContainerStyle={{ gap: 18, alignItems: "center" }}>
+            {(settings.top_bar_messages as string[]).map((m, i) => (
+              <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Feather name="check-circle" size={12} color={colors.primary} />
+                <Txt size={11} color={colors.textMuted}>
+                  {m}
+                </Txt>
+              </View>
+            ))}
+          </ScrollView>
+        ) : null}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           {settings?.logo ? (
             <Image source={mediaUrl(settings.logo)} style={{ width: 40, height: 40, borderRadius: 10 }} contentFit="contain" />
@@ -98,6 +111,9 @@ export default function Home() {
             <Txt color={colors.textLight} size={14}>
               Rechercher un produit, une marque…
             </Txt>
+          </Pressable>
+          <Pressable testID="home-notifications" onPress={() => router.push("/notifications")} hitSlop={8} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }}>
+            <Feather name="bell" size={19} color={colors.text} />
           </Pressable>
         </View>
       </View>
@@ -210,7 +226,7 @@ export default function Home() {
 
         {/* Brands */}
         <View style={{ marginBottom: 24 }}>
-          <SectionHeader title="Nos Marques" />
+          <SectionHeader title="Nos Marques" onSeeAll={() => router.push("/marques")} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
             {(brands.data || []).map((b: any) => (
               <Pressable key={b.id} onPress={() => router.push(`/marque/${b.id}`)} style={{ paddingHorizontal: 18, height: 48, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }}>
@@ -220,6 +236,24 @@ export default function Home() {
               </Pressable>
             ))}
           </ScrollView>
+        </View>
+
+        {/* Gift banners */}
+        <View style={{ flexDirection: "row", gap: 12, paddingHorizontal: 16, marginBottom: 24 }}>
+          <Pressable onPress={() => router.push("/carte-cadeau")} style={{ flex: 1, borderRadius: 16, overflow: "hidden" }}>
+            <LinearGradient colors={[colors.primary, colors.primaryDark]} style={{ padding: 16, height: 110, justifyContent: "space-between" }}>
+              <Feather name="gift" size={22} color="#fff" />
+              <Txt family="display" weight={700} size={14} color="#fff">
+                Cartes cadeaux
+              </Txt>
+            </LinearGradient>
+          </Pressable>
+          <Pressable onPress={() => router.push("/idees-cadeaux")} style={{ flex: 1, borderRadius: 16, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: 16, height: 110, justifyContent: "space-between" }}>
+            <Feather name="package" size={22} color={colors.primary} />
+            <Txt family="display" weight={700} size={14}>
+              Idées cadeaux
+            </Txt>
+          </Pressable>
         </View>
 
         {/* Blog */}
@@ -244,6 +278,8 @@ export default function Home() {
             ))}
           </View>
         </View>
+
+        <Footer />
       </ScrollView>
     </View>
   );

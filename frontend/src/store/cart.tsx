@@ -8,6 +8,7 @@ export type CartLine = {
   image?: string | null;
   brand?: string;
   stock?: number;
+  ecard?: any;
   quantity: number;
 };
 

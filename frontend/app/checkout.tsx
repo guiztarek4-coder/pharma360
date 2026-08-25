@@ -9,6 +9,7 @@ import { ScreenHeader, Button, Txt, Sheet } from "@/src/components/ui";
 import { Field } from "@/src/components/Field";
 import { useCart } from "@/src/store/cart";
 import { useAuth } from "@/src/store/auth";
+import { useMemberPricing } from "@/src/store/memberPricing";
 import { useFetch } from "@/src/lib/useFetch";
 import { api } from "@/src/lib/api";
 import { formatDA } from "@/src/lib/format";
@@ -21,7 +22,22 @@ export default function Checkout() {
   const router = useRouter();
   const { items, subtotal, clear } = useCart();
   const { user } = useAuth();
+  const { getMemberPrice } = useMemberPricing();
   const wilayas = useFetch<Wilaya[]>("/delivery/wilayas");
+
+  // effective line prices with member pricing
+  const effItems = items.map((l) => {
+    const mp = getMemberPrice({ id: l.product_id, price: l.price });
+    return { ...l, effPrice: mp ? mp.price : l.price, isMember: !!mp };
+  });
+  const effSubtotal = effItems.reduce((s, l) => s + l.effPrice * l.quantity, 0);
+
+  const [promoCode, setPromoCode] = useState("");
+  const [promo, setPromo] = useState<{ code: string; discount: number } | null>(null);
+  const [giftCardCode, setGiftCardCode] = useState("");
+  const [giftCard, setGiftCard] = useState<{ code: string; balance: number } | null>(null);
+  const [giftCode, setGiftCode] = useState("");
+  const [codeMsg, setCodeMsg] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState(user ? `${user.first_name} ${user.last_name}` : "");
   const [phone, setPhone] = useState(user?.phone || "");
@@ -44,7 +60,33 @@ export default function Checkout() {
     return wilaya?.base_fee ?? settings?.delivery_fee ?? 0;
   }, [delivery, wilaya, settings]);
 
-  const total = subtotal + deliveryFee;
+  const total = Math.max(0, effSubtotal + deliveryFee - (promo?.discount || 0) - (giftCard ? Math.min(giftCard.balance, effSubtotal + deliveryFee - (promo?.discount || 0)) : 0));
+  const giftCardApplied = giftCard ? Math.min(giftCard.balance, effSubtotal + deliveryFee - (promo?.discount || 0)) : 0;
+
+  const applyPromo = async () => {
+    if (!promoCode.trim()) return;
+    setCodeMsg(null);
+    try {
+      const r = await api.post("/promo/validate", { code: promoCode.trim(), subtotal: effSubtotal });
+      setPromo({ code: promoCode.trim(), discount: r.discount || 0 });
+      setCodeMsg(`Code appliqué : -${formatDA(r.discount || 0)}`);
+    } catch (e: any) {
+      setPromo(null);
+      setCodeMsg(e?.message || "Code promo invalide.");
+    }
+  };
+  const applyGiftCard = async () => {
+    if (!giftCardCode.trim()) return;
+    setCodeMsg(null);
+    try {
+      const r = await api.post("/giftcard/validate", { code: giftCardCode.trim() });
+      setGiftCard({ code: giftCardCode.trim(), balance: r.balance || 0 });
+      setCodeMsg(`E-carte appliquée · solde ${formatDA(r.balance || 0)}`);
+    } catch (e: any) {
+      setGiftCard(null);
+      setCodeMsg(e?.message || "E-carte invalide.");
+    }
+  };
 
   const submit = async () => {
     if (!fullName || !phone) return setErr("Nom et téléphone sont obligatoires.");
@@ -56,7 +98,7 @@ export default function Checkout() {
       const order = await api.post(
         "/orders",
         {
-          items: items.map((l) => ({ product_id: l.product_id, name: l.name, price: l.price, quantity: l.quantity, image: l.image || null })),
+          items: effItems.map((l) => ({ product_id: l.product_id, name: l.name, price: l.effPrice, quantity: l.quantity, image: l.image || null, ...(l.ecard ? { ecard: l.ecard } : {}) })),
           full_name: fullName.trim(),
           phone: phone.trim(),
           email: email.trim() || null,
@@ -65,6 +107,9 @@ export default function Checkout() {
           street: street.trim(),
           payment_method: payment,
           delivery_method: delivery,
+          promo_code: promo?.code || "",
+          giftcard_code: giftCard?.code || "",
+          gift_code: giftCode.trim(),
         },
         !!user
       );
@@ -145,33 +190,58 @@ export default function Checkout() {
           </View>
         </Section>
 
+        <Section title="Codes & réductions">
+          <View style={{ flexDirection: "row", gap: 8, alignItems: "flex-end" }}>
+            <View style={{ flex: 1 }}>
+              <Field testID="promo-input" label="Code promo" icon="tag" value={promoCode} onChangeText={setPromoCode} placeholder="Ex: PROMO10" autoCapitalize="characters" />
+            </View>
+            <Button testID="promo-apply" title="Appliquer" variant="outline" onPress={applyPromo} style={{ height: 52 }} />
+          </View>
+          <View style={{ flexDirection: "row", gap: 8, alignItems: "flex-end" }}>
+            <View style={{ flex: 1 }}>
+              <Field testID="giftcard-input" label="Carte cadeau / e-carte" icon="credit-card" value={giftCardCode} onChangeText={setGiftCardCode} placeholder="Code e-carte" autoCapitalize="characters" />
+            </View>
+            <Button testID="giftcard-apply" title="Appliquer" variant="outline" onPress={applyGiftCard} style={{ height: 52 }} />
+          </View>
+          <Field testID="gift-code-input" label="Code cadeau fidélité (optionnel)" icon="gift" value={giftCode} onChangeText={setGiftCode} placeholder="Code récompense" autoCapitalize="characters" />
+          {codeMsg ? (
+            <Txt size={12} color={promo || giftCard ? colors.success : colors.danger}>
+              {codeMsg}
+            </Txt>
+          ) : null}
+        </Section>
+
         <Section title="Récapitulatif">
-          {items.map((l) => (
+          {effItems.map((l) => (
             <View key={l.product_id} style={{ flexDirection: "row", justifyContent: "space-between" }}>
               <Txt size={13} color={colors.textMuted} style={{ flex: 1 }} numberOfLines={1}>
-                {l.quantity} × {l.name}
+                {l.quantity} × {l.name}{l.isMember ? "  ·  membre" : ""}
               </Txt>
               <Txt size={13} weight={600}>
-                {formatDA(l.price * l.quantity)}
+                {formatDA(l.effPrice * l.quantity)}
               </Txt>
             </View>
           ))}
           <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 4 }} />
           <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-            <Txt size={14} color={colors.textMuted}>
-              Sous-total
-            </Txt>
-            <Txt size={14} weight={600}>
-              {formatDA(subtotal)}
-            </Txt>
+            <Txt size={14} color={colors.textMuted}>Sous-total</Txt>
+            <Txt size={14} weight={600}>{formatDA(effSubtotal)}</Txt>
           </View>
+          {promo ? (
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <Txt size={14} color={colors.success}>Code promo ({promo.code})</Txt>
+              <Txt size={14} weight={600} color={colors.success}>-{formatDA(promo.discount)}</Txt>
+            </View>
+          ) : null}
+          {giftCardApplied > 0 ? (
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <Txt size={14} color={colors.success}>E-carte</Txt>
+              <Txt size={14} weight={600} color={colors.success}>-{formatDA(giftCardApplied)}</Txt>
+            </View>
+          ) : null}
           <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-            <Txt size={14} color={colors.textMuted}>
-              Livraison
-            </Txt>
-            <Txt size={14} weight={600}>
-              {formatDA(deliveryFee)}
-            </Txt>
+            <Txt size={14} color={colors.textMuted}>Livraison</Txt>
+            <Txt size={14} weight={600}>{formatDA(deliveryFee)}</Txt>
           </View>
         </Section>
 

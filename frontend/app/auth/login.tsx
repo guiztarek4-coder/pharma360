@@ -64,6 +64,10 @@ export default function Login() {
 
         <Button testID="login-submit" title="Se connecter" size="lg" loading={loading} onPress={submit} style={{ marginTop: 4 }} />
 
+        <Txt testID="forgot-link" size={13} weight={600} color={colors.primary} center onPress={() => router.push("/reset-password")} style={{ marginTop: 4 }}>
+          Mot de passe oublié ?
+        </Txt>
+
         <View style={{ flexDirection: "row", justifyContent: "center", gap: 6, marginTop: 8 }}>
           <Txt size={14} color={colors.textMuted}>
             Pas encore de compte ?

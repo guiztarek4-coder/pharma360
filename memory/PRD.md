@@ -49,6 +49,32 @@ publication. One single admin manages both site and app. Parapharmacy (no prescr
   earning loyalty points.
 - Store owner/admin who manages everything from the SAME existing website back-office.
 
+## Full replica (2026-06 / build 2) — every website feature added
+Per user request, the app is now a COMPLETE faithful replica of pharma360benak.com. Added:
+- Server-side favorites (user.favorites via POST/DELETE /favorites/{id}) + /favoris screen.
+- Member pricing: MemberPricingProvider (GET /loyalty/member-pricing) — discounted "membre" prices on
+  product cards & checkout, replicating the site's getMemberPrice algorithm.
+- Full loyalty (/fidelite): status + progress, exclusive member offers (settings.loyalty_offers),
+  tier gifts with claim (POST /loyalty/claim-gift), rewards redeem (POST /loyalty/redeem), referral
+  card (referral_code + share).
+- Client chat: global floating widget (POST /chat/start, GET /chat/{id}/messages, POST /chat/{id}/message).
+- Gift cards (/carte-cadeau): amounts + delivery mode + recipient, adds e-card line (ecard) to cart.
+- Gift ideas (/idees-cadeaux): intro + packs + featured (GET /gift-ideas).
+- Brands index (/marques).
+- Contact (/contact → POST /contact), Addresses (/adresses CRUD /account/addresses),
+  Notifications (/notifications), Password reset (/reset-password → forgot + reset).
+- Content pages: /cgv, /confidentialite (from settings), /page/[slug] (GET /pages/{slug}).
+- Checkout upgrades: promo code (/promo/validate), e-card (/giftcard/validate), loyalty gift code,
+  member pricing applied to line prices, e-card passthrough in order items.
+- Home: top-bar messages ticker, notifications bell, gift banners, Footer (about, help/discover links,
+  socials, contact) with links to dynamic pages.
+- Richer Account menu linking all of the above.
+
+### Testing (iteration_2)
+Frontend testing agent: 16/16 flows PASS against the live API. Login OK, all new screens functional.
+Non-blocking web-only console noise (guest /favorites 401, /notifications 403 for customer role,
+react-native-web pointerEvents/shadow deprecation) — UIs render correctly.
+
 ## Backlog (next)
 - P1: Server-side favorites sync (/favorites) + notifications (/notifications) once desired.
 - P1: Promo code & gift card fields at checkout (/promo/validate, /giftcard/validate).

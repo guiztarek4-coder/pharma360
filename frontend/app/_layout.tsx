@@ -13,6 +13,8 @@ import { ThemeProvider } from "@/src/theme/theme";
 import { AuthProvider } from "@/src/store/auth";
 import { CartProvider } from "@/src/store/cart";
 import { FavoritesProvider } from "@/src/store/favorites";
+import { MemberPricingProvider } from "@/src/store/memberPricing";
+import { ChatWidget } from "@/src/components/ChatWidget";
 
 // Disable logbox errors etc so that users can see the app
 // and agent works as expected.
@@ -52,6 +54,7 @@ export default function RootLayout() {
         <ThemeProvider>
           <AuthProvider>
             <FavoritesProvider>
+              <MemberPricingProvider>
               <CartProvider>
                 <StatusBar style="dark" />
                 <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#FAF6EF" } }}>
@@ -69,7 +72,9 @@ export default function RootLayout() {
                   <Stack.Screen name="blog/[id]" />
                   <Stack.Screen name="order-success" />
                 </Stack>
+                <ChatWidget />
               </CartProvider>
+              </MemberPricingProvider>
             </FavoritesProvider>
           </AuthProvider>
         </ThemeProvider>

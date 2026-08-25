@@ -1,0 +1,40 @@
+{
+  "summary": "Frontend-only regression + new-features test of Pharma360 Expo web (mobile viewport 390x844) against LIVE external API https://pharma360benak.com/api. Verified regression (Home ticker, catalogue, product detail with add-to-cart-btn testID, cart badge, tabs) and ALL newly added complete-replica features: server-side favorites (guest empty state), full loyalty /fidelite (status card, points/progress, exclusive offers, tiers with 6 claim + 3 redeem buttons all correctly disabled at 0 pts), client chat widget (fab -> start form -> message sent), /contact (submit success screen), /carte-cadeau (adds gift-card line to cart -> /panier), /idees-cadeaux (packs + featured products), /marques (9 brands) -> /marque/{id} (Avène 12 products), checkout promo & giftcard code validation (shows proper 'invalide' messages for bad codes), /adresses (add + delete address, testIDs present), /notifications logged-in empty state, /reset-password (email submit -> confirmation message), content pages (/cgv, /confidentialite, /page/faq render), home extras (ticker, gift banners, 'Nos Marques' Voir tout -> /marques, home-notifications). Login with app.test.1787653725@pharma360test.com succeeds and Compte tab shows 'App Test' profile + '0 points'. No real order was placed. One address was added and then deleted. One chat message and one contact message were sent as instructed. All required testIDs from the review are present and working.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Notifications (logged in)", "issue": "GET /notifications and POST /notifications/read returned HTTP 403 in console while the screen still rendered the empty state gracefully. Likely the customer role has no notifications route or 'read' endpoint requires admin — verify server permissions or hide the read call when list is empty.", "affected_testIDs": []},
+      {"flow": "Guest favorites", "issue": "GET /favorites is called with no auth token and returns 401 on many public screens (Home, Favoris, etc). Not user-visible (screen shows local empty state), but noisy in the console. Skip the GET when there is no token or gate favorites store hydration behind auth.", "affected_testIDs": []}
+    ],
+    "design_issues": [
+      {"screen": "global (web)", "issues": [
+        "Deprecation warning still present: 'props.pointerEvents is deprecated. Use style.pointerEvents' (react-native-web).",
+        "New deprecation warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' — audit shadow styles across StyleSheets.",
+        "'Animated: useNativeDriver is not supported' warning on web — expected but noisy."
+      ]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_2.json"],
+  "action_items": [
+    "Guard the favorites store hydration and the notifications 'read' call behind an auth-token check to eliminate 401/403 noise in the console.",
+    "Migrate legacy 'shadow*' StyleSheet props to 'boxShadow' (and any remaining prop 'pointerEvents' to style.pointerEvents) to clear deprecation warnings.",
+    "Confirm that GET /notifications is intended to be callable by customers on the live API (currently returns 403 for the test account) — either enable the endpoint for customers or move the empty-state to purely local until server supports it.",
+    "(Nice-to-have) Add explicit testID='brand-<id>' on brand cards in /marques so future tests don’t rely on brand text."
+  ],
+  "critical_code_review_comments": [
+    "All requested testIDs are wired correctly: chat-fab / chat-input / chat-send, contact-submit, giftcard-order-btn, promo-input / promo-apply, giftcard-input / giftcard-apply, add-address / addr-name / addr-phone / addr-street / save-address / del-address-<id>, fp-submit, forgot-link, home-notifications, claim-<id>, redeem-<id>, add-to-cart-btn, login-identifier / login-password / login-submit.",
+    "Field component correctly forwards testID onto the TextInput itself (page.fill('[data-testid=...]') works). Good.",
+    "Auth is preserved across route changes (Compte shows profile + points after login; addresses/notifications/fidelite require login and gracefully show 'Se connecter' otherwise).",
+    "Checkout applies promo/giftcard codes via /promo/validate and /giftcard/validate as documented in API_MAP.md and surfaces server error messages to the user.",
+    "Gift card flow correctly injects a cart line and navigates to /panier."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (external live API not in scope)", "frontend": "100% of requested flows (16/16 tested)"},
+  "seed_data_creation": "Created 1 address on the test account and deleted it in the same run. Sent 1 chat message and 1 contact message as required. No order was placed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "App consumes the live external API https://pharma360benak.com/api directly — do NOT actually place orders (writes to prod DB). Test credentials in /app/memory/test_credentials.md. Preview URL: https://pharma360-mobile.preview.emergentagent.com. Field component wraps its testID onto the TextInput itself, so use page.fill('[data-testid=\"login-identifier\"]', ...) — no ' input' suffix. Loyalty buttons render but are disabled when the account has 0 points (correct behavior); do not attempt to claim/redeem repeatedly.",
+  "rca_of_issue": "No blocking bugs. Two minor console-noise integration issues: (1) /favorites and /notifications endpoints are called without proper auth-gating for guests, producing 401/403 in the console; the UI stays correct. (2) Two deprecation warnings from react-native-web (pointerEvents, shadow* -> boxShadow) that main agent should address in a cleanup pass."
+}

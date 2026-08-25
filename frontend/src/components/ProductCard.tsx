@@ -9,6 +9,7 @@ import { formatDA, discountPct } from "@/src/lib/format";
 import { mediaUrl } from "@/src/lib/api";
 import { useCart } from "@/src/store/cart";
 import { useFavorites } from "@/src/store/favorites";
+import { useMemberPricing } from "@/src/store/memberPricing";
 import * as Haptics from "expo-haptics";
 
 export type Product = {
@@ -28,6 +29,8 @@ export function ProductCard({ product, width }: { product: Product; width?: numb
   const router = useRouter();
   const { add } = useCart();
   const { isFav, toggle } = useFavorites();
+  const { getMemberPrice } = useMemberPricing();
+  const member = getMemberPrice(product);
   const pct = discountPct(product.price, product.old_price);
   const out = (product.stock ?? 0) <= 0;
   const img = mediaUrl(product.images?.[0]);
@@ -82,10 +85,14 @@ export function ProductCard({ product, width }: { product: Product; width?: numb
         </Txt>
         <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginTop: 2 }}>
           <View style={{ flex: 1 }}>
-            <Txt family="display" weight={700} size={15} color={colors.text}>
-              {formatDA(product.price)}
+            <Txt family="display" weight={700} size={15} color={member ? colors.primary : colors.text}>
+              {formatDA(member ? member.price : product.price)}
             </Txt>
-            {product.old_price && product.old_price > product.price ? (
+            {member ? (
+              <Txt size={11} color={colors.textLight} style={{ textDecorationLine: "line-through" }}>
+                {formatDA(member.original)}
+              </Txt>
+            ) : product.old_price && product.old_price > product.price ? (
               <Txt size={11} color={colors.textLight} style={{ textDecorationLine: "line-through" }}>
                 {formatDA(product.old_price)}
               </Txt>

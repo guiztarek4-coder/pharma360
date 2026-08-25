@@ -96,10 +96,24 @@ export default function Compte() {
 
         <View style={{ marginTop: 20, backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border }}>
           {user ? <Row testID="menu-orders" icon="package" label="Mes commandes" onPress={() => router.push("/commandes")} /> : null}
-          <Row testID="menu-favorites" icon="heart" label={`Mes favoris${ids.length ? ` (${ids.length})` : ""}`} onPress={() => router.push("/catalogue")} />
+          <Row testID="menu-favorites" icon="heart" label={`Mes favoris${ids.length ? ` (${ids.length})` : ""}`} onPress={() => router.push("/favoris")} />
+          {user ? <Row testID="menu-addresses" icon="map-pin" label="Mes adresses" onPress={() => router.push("/adresses")} /> : null}
+          {user ? <Row testID="menu-notifications" icon="bell" label="Notifications" onPress={() => router.push("/notifications")} /> : null}
           <Row testID="menu-loyalty" icon="award" label="Programme de fidélité" onPress={() => router.push("/fidelite")} />
+        </View>
+
+        <View style={{ marginTop: 16, backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border }}>
+          <Row testID="menu-giftcard" icon="gift" label="Cartes cadeaux" onPress={() => router.push("/carte-cadeau")} />
+          <Row testID="menu-giftideas" icon="package" label="Idées cadeaux" onPress={() => router.push("/idees-cadeaux")} />
           <Row testID="menu-pharmacy" icon="map-pin" label="Notre pharmacie" onPress={() => router.push("/pharmacie")} />
           <Row testID="menu-blog" icon="book-open" label="Conseils & astuces" onPress={() => router.push("/blog")} />
+        </View>
+
+        <View style={{ marginTop: 16, backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border }}>
+          <Row testID="menu-contact" icon="mail" label="Nous contacter" onPress={() => router.push("/contact")} />
+          <Row testID="menu-faq" icon="help-circle" label="FAQ & aide" onPress={() => router.push("/page/faq")} />
+          <Row testID="menu-cgv" icon="file-text" label="CGV" onPress={() => router.push("/cgv")} />
+          <Row testID="menu-privacy" icon="shield" label="Confidentialité" onPress={() => router.push("/confidentialite")} />
         </View>
 
         <View style={{ marginTop: 16, backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border }}>
