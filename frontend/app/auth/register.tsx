@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { View } from "react-native";
-import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+import { KeyboardAwareScrollView } from "@/src/components/KeyboardAware";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/src/theme/theme";
 import { ScreenHeader, Button, Txt } from "@/src/components/ui";

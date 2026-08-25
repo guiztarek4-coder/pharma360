@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { View, Pressable, StyleSheet, ActivityIndicator } from "react-native";
-import { KeyboardAwareScrollView, KeyboardStickyView } from "react-native-keyboard-controller";
+import { KeyboardAwareScrollView, KeyboardStickyView } from "@/src/components/KeyboardAware";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
