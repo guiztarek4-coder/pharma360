@@ -1,0 +1,39 @@
+{
+  "summary": "Frontend-only smoke + integration test of Pharma360 Expo web app against LIVE external API https://pharma360benak.com/api. Verified Home, Catalogue (search + category chips), Product detail, Cart persistence, Checkout (wilaya sheet + dynamic delivery fee), Auth (login), Compte guest + logged-in, Fidélité, Commandes (/orders/mine), Blog, Pharmacie. Login with test credentials succeeds and profile 'App Test' + existing order 'KFK 444 DA' are shown. Add-to-cart via text works (button lacks a testID). No order was actually posted to prod DB. Overall app is functional and design matches teal-blue + cream theme from /settings.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "app/produit/[id].tsx", "issue": "Sticky 'Ajouter au panier' button has no testID (works via visible text 'Ajouter au panier'). Add testID='add-to-cart' for reliable automated testing.", "testID": "add-to-cart (missing)", "priority": "LOW"},
+      {"component": "app/auth/login.tsx", "issue": "Login screen 'Se connecter' submit button and inputs have no testID (guessable via label text but not robust). Recommend testID='login-identifier', 'login-password', 'login-submit'.", "testID": "login-submit (missing)", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Auth navigation back", "issue": "Console warning: 'The action GO_BACK was not handled by any navigator' when landing directly on /auth/login. If user deep-links to login (or after logout), back navigation may not work. Consider router.replace after auth or a safe fallback that pushes to '/'.", "affected_testIDs": ["login-cta"]}
+    ],
+    "design_issues": [
+      {"screen": "home", "issues": ["Console warning 'props.pointerEvents is deprecated. Use style.pointerEvents' from some react-native-web element (likely LinearGradient/ScrollView). Migrate to style.pointerEvents when possible."]},
+      {"screen": "global", "issues": ["Warning 'Animated: useNativeDriver is not supported' shows on multiple screens — expected on web, but ensure animation performance is acceptable on device."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_1.json"],
+  "action_items": [
+    "Add testID='add-to-cart' to the sticky 'Ajouter au panier' button in app/produit/[id].tsx.",
+    "Add testID to auth screens: 'login-identifier', 'login-password', 'login-submit' in app/auth/login.tsx, and equivalents in app/auth/register.tsx.",
+    "Handle direct-open navigation to /auth/login (deep-link/logout) by replacing history or providing a fallback back handler so 'GO_BACK' warning disappears and the back button always returns to a real screen.",
+    "Address deprecation warning 'props.pointerEvents is deprecated' — audit components that pass pointerEvents as a prop (likely LinearGradient absolute overlays) and move it to the style prop."
+  ],
+  "critical_code_review_comments": [
+    "api.ts correctly uses EXPO_PUBLIC_PHARMA_API_URL from env and captures set-cookie access_token for native — good.",
+    "Cart state persisted via storage keys ('pharma_cart') and reflected across tabs — verified working (badge '1' on tab bar).",
+    "Checkout /orders POST body matches API_MAP.md contract; wilaya fee is dynamically read from /delivery/wilayas — verified UI updates from 500 → 400 DA on Chlef.",
+    "GET /orders/mine used correctly for customer orders (not admin /orders) — verified working after login.",
+    "Home hero, promos, categories, brands, blog all populated from live API and dynamic theme (bleu poudré/crème) is applied — verified."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (external live API, not in scope)", "frontend": "100% of critical flows (11/11 tested screens work)"},
+  "seed_data_creation": "None. Reused existing customer test account and did NOT place a real order in prod DB.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "App calls live external API https://pharma360benak.com/api directly. Do NOT actually submit checkout (it writes to prod DB). Test credentials in /app/memory/test_credentials.md. Preview URL: https://pharma360-mobile.preview.emergentagent.com. Add-to-cart on product page is currently only reachable via visible text 'Ajouter au panier' unless main agent adds testID='add-to-cart'.",
+  "rca_of_issue": "No blocking bugs. Only minor gaps: missing testIDs on product/auth CTAs and a deep-link back-navigation warning on /auth/login. Root cause of missing testIDs: components were written before test hooks were added; recommend a testID pass over all interactive CTAs."
+}

@@ -1,0 +1,182 @@
+{
+  "app_name": "Pharma360",
+  "personality": "1 iOS-Native structure with 3 Editorial premium typography & spacing",
+  "personality_one_liner": "A premium, adaptable parapharmacy experience where the dynamic theme frames high-quality skincare and wellness products.",
+  "color": {
+    "surface": "#FAF6EF",
+    "onSurface": "#1A1A1A",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#1A1A1A",
+    "surfaceTertiary": "#F0EBE1",
+    "onSurfaceTertiary": "#4A4A4A",
+    "surfaceInverse": "#1A1A1A",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#A8C3D4",
+    "brandPrimary": "#A8C3D4",
+    "onBrandPrimary": "#1A1A1A",
+    "brandSecondary": "#C9DEED",
+    "onBrandSecondary": "#1A1A1A",
+    "brandTertiary": "#E6F0F7",
+    "onBrandTertiary": "#1A1A1A",
+    "success": "#D4E6D9",
+    "onSuccess": "#1F4D29",
+    "warning": "#FDF3D0",
+    "onWarning": "#664D03",
+    "error": "#FCE8E6",
+    "onError": "#A12622",
+    "info": "#E6F0F7",
+    "onInfo": "#1A1A1A",
+    "border": "#E8E3DA",
+    "borderStrong": "#D6D0C4",
+    "divider": "#E8E3DA",
+    "bronze": "#CD7F32",
+    "silver": "#C0C0C0",
+    "gold": "#FFD700"
+  },
+  "typography": {
+    "displayFontFamily": "Outfit",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous vertical breathing room for premium editorial feel. No cramped grids.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Feather",
+  "glassmorphism": {
+    "enabled": "true",
+    "do's": [
+      "Sticky headers over scrolling content.",
+      "Bottom tab bar",
+      "Floating action buttons"
+    ],
+    "dont's": [
+      "Cards in dense product lists",
+      "Form fields",
+      "Body text regions"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Home",
+      "purpose": "A premium storefront featuring dynamic themes, hero banners, curated product carousels, categories, and loyalty progression.",
+      "states": {
+        "loading": "Skeleton loaders mimicking the hero banner and product carousels.",
+        "empty": "N/A - Home is never empty unless API fails.",
+        "error": "Full-screen clean error state with a soft red illustration and 'Réessayer' button."
+      },
+      "layout": "1. Search Bar at top.\n2. Hero banner (photo with gradient-to-dark scrim + text).\n3. Loyalty Teaser Card (Glass overlay showing current tier and points).\n4. 'Nos Offres' Horizontal Carousel (Cards with old strikethrough price, discount badge, new price in DA).\n5. 'Nouvel Arrivage' Horizontal Carousel.\n6. Categories Grid (2xN tiles).\n7. 'Coups de Cœur' Horizontal Carousel.\n8. Brands Strip (horizontal logos).\n9. Blog Teasers (vertical list).\n*All sections separated by 'xl' spacing.*"
+    },
+    {
+      "name": "Catalogue",
+      "purpose": "Discover and filter parapharmacy products smoothly.",
+      "states": {
+        "loading": "Grid of product skeletons.",
+        "empty": "Illustration of an empty shelf, 'Aucun produit trouvé', 'Réinitialiser les filtres' CTA.",
+        "error": "Error message with 'Réessayer'."
+      },
+      "layout": "1. Sticky header with Search & Filter button.\n2. Horizontal scrollable category/brand chips (surfaceTertiary background, brandPrimary when active).\n3. 2-column product grid with 'md' gap."
+    },
+    {
+      "name": "Product Detail",
+      "purpose": "Showcase a product immersively with add-to-cart functionality.",
+      "states": {
+        "loading": "Spinner centered on screen.",
+        "empty": "Product not found message.",
+        "error": "Error fetching product details."
+      },
+      "layout": "1. Large image gallery pager at the top.\n2. Product Title, Brand, Price in DA, Old Price (strikethrough), Discount Badge.\n3. Loyalty badge indicating points earned.\n4. Stock status indicator (success/warning token).\n5. Expandable sections for Description and How to Use.\n6. 'Produits complémentaires' carousel at bottom.\n7. Sticky bottom CTA 'Ajouter au panier'."
+    },
+    {
+      "name": "Cart & Checkout",
+      "purpose": "Seamless and trustworthy checkout flow with COD and BaridiMob support.",
+      "states": {
+        "loading": "Spinner.",
+        "empty": "Empty cart illustration, 'Votre panier est vide', 'Continuer mes achats' CTA.",
+        "error": "Checkout failed error."
+      },
+      "layout": "1. Cart items list with quantity adjusters.\n2. Order summary (Subtotal, Delivery fee dynamically calculated via Wilaya picker, Total).\n3. Address Form (Single column, labels above inputs).\n4. Payment Method Selector (COD vs BaridiMob tiles).\n5. Sticky 'Confirmer la commande' CTA."
+    },
+    {
+      "name": "Loyalty",
+      "purpose": "Motivate users with tiered rewards and point progression.",
+      "states": {
+        "loading": "Skeleton view.",
+        "empty": "N/A.",
+        "error": "Error loading loyalty status."
+      },
+      "layout": "1. Large current Tier Badge at the top (Bronze/Silver/Gold specific styling).\n2. Points progress bar to next tier.\n3. List of redeemable rewards cards."
+    },
+    {
+      "name": "Store Locator",
+      "purpose": "Help users find and explore physical pharmacies.",
+      "states": {
+        "loading": "Map skeleton.",
+        "empty": "No stores found.",
+        "error": "Error loading map."
+      },
+      "layout": "1. Map view with custom pins.\n2. Store detail card at bottom sheet showing address and 'Visite Virtuelle' (Matterport) button."
+    }
+  ],
+  "images": {
+    "hero_flatlay": {
+      "url": "https://images.unsplash.com/photo-1598528738936-c50861cc75a9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzZ8MHwxfHNlYXJjaHwxfHxwcmVtaXVtJTIwc2tpbmNhcmUlMjBjb3NtZXRpY3MlMjBwcm9kdWN0cyUyMGZsYXRsYXl8ZW58MHx8fHwxNzg3NjUzOTUzfDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Premium skincare cosmetics flatlay"
+    },
+    "loyalty_bronze": {
+      "url": "https://images.unsplash.com/photo-1555099962-4199c345e5dd?w=800&q=80",
+      "alt": "Bronze tier texture"
+    },
+    "loyalty_silver": {
+      "url": "https://images.unsplash.com/photo-1612817288484-6f916006741a?w=800&q=80",
+      "alt": "Silver tier texture"
+    },
+    "loyalty_gold": {
+      "url": "https://images.unsplash.com/photo-1611082539097-391e604ec2ce?w=800&q=80",
+      "alt": "Gold tier texture"
+    }
+  },
+  "instructions_to_main_agent": [
+    "DYNAMIC THEME SYSTEM: The app MUST fetch the active theme from the API at runtime. Use the 'Bleu poudré & Blanc crème' tokens in this JSON (#A8C3D4 / #FAF6EF) as the DEFAULT theme. Build a Context or Zustand store that injects `surface`, `brandPrimary`, and derives `surfaceSecondary` and `onSurface` from the fetched settings.",
+    "PRODUCT CARD SPEC: Use a pure white (`surfaceSecondary`) card with `md` border-radius and `shadow_tier: 1`. Include product image, brand name (xs size, onSurfaceTertiary), product name (base size, 500 weight), old price with strikethrough, new price in DA (lg size, 500 weight), and an absolute-positioned discount badge (top-left, brandTertiary bg, onBrandTertiary text).",
+    "PROMO/DISCOUNT BADGE SPEC: Small rounded rectangle (sm radius), colored using the dynamic `brand` or `error` token depending on urgency, contrasting text.",
+    "LOYALTY TIER BADGE SPEC: Bronze (#CD7F32), Silver (#C0C0C0), Gold (#FFD700). Create these as elevated, metallic-looking chips (or use gradients if possible) to make them feel highly premium.",
+    "BOTTOM TAB NAV SPEC: Use glassmorphism (`expo-blur` or equivalent) for the bottom tab background. Active icon uses `brandPrimary` (with onBrandPrimary fallback if too light), inactive uses `onSurfaceTertiary`. Labels should be hidden or size `xs`.",
+    "Ensure prices are consistently formatted in 'DA' (Algerian Dinar).",
+    "Always use a vertical gradient scrim (transparent to surfaceInverse) over the hero image to ensure text readability.",
+    "Include a 'Visite Virtuelle' button for the Matterport tour in the Store Locator screen.",
+    "Do NOT use pure Inter or Roboto; integrate 'Outfit' and 'Plus Jakarta Sans' via expo-font."
+  ]
+}
