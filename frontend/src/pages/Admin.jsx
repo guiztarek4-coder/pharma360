@@ -1201,7 +1201,15 @@ function GiftAdminPanel() {
   const [busy, setBusy] = useState(false);
   const loadPacks = () => api.get("/admin/gift-packs").then((r) => setPacks(r.data)).catch(() => {});
   const [ecards, setEcards] = useState([]);
-  useEffect(() => { api.get("/settings").then((r) => setF(r.data)); loadPacks(); api.get("/admin/giftcards").then((r) => setEcards(r.data)).catch(() => {}); }, []);
+  const loadEcards = () => api.get("/admin/giftcards").then((r) => setEcards(r.data)).catch(() => {});
+  const [resending, setResending] = useState(null);
+  const resendEcard = async (c) => {
+    setResending(c.id);
+    try { await api.post(`/admin/giftcards/${c.id}/resend`); toast.success(`E-carte renvoyée à ${c.recipient_email}`); loadEcards(); }
+    catch (e) { toast.error(formatApiError(e.response?.data?.detail) || "Échec de l'envoi"); loadEcards(); }
+    finally { setResending(null); }
+  };
+  useEffect(() => { api.get("/settings").then((r) => setF(r.data)); loadPacks(); loadEcards(); }, []);
   if (!f) return <p className="text-slate-400">Chargement…</p>;
 
   const amounts = f.giftcard_amounts || [];
@@ -1276,9 +1284,9 @@ function GiftAdminPanel() {
         <h3 className="font-display font-bold text-lg mb-3">E-cartes cadeaux émises</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[620px]" data-testid="admin-ecards-table">
-            <thead className="bg-mint-50 text-slate-500 text-xs uppercase"><tr><th className="text-left p-2">Code</th><th className="text-left p-2">Montant</th><th className="text-left p-2">Solde</th><th className="text-left p-2">Envoi</th><th className="text-left p-2">Date</th><th className="text-left p-2">Statut</th></tr></thead>
+            <thead className="bg-mint-50 text-slate-500 text-xs uppercase"><tr><th className="text-left p-2">Code</th><th className="text-left p-2">Montant</th><th className="text-left p-2">Solde</th><th className="text-left p-2">Envoi</th><th className="text-left p-2">Date prévue</th><th className="text-left p-2">Statut</th><th className="text-left p-2">Email</th><th className="text-left p-2">Action</th></tr></thead>
             <tbody>
-              {ecards.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-slate-400">Aucune e-carte.</td></tr>}
+              {ecards.length === 0 && <tr><td colSpan={8} className="p-6 text-center text-slate-400">Aucune e-carte.</td></tr>}
               {ecards.map((c) => (
                 <tr key={c.id} className="border-t border-mint-50" data-testid={`admin-ecard-${c.id}`}>
                   <td className="p-2 font-mono text-xs">{c.code}</td>
@@ -1287,6 +1295,22 @@ function GiftAdminPanel() {
                   <td className="p-2">{c.delivery === "email" ? `Email (${c.recipient_email || "—"})` : "Impression"}</td>
                   <td className="p-2 text-slate-500">{c.scheduled_date || "—"}</td>
                   <td className="p-2"><span className="px-2 py-0.5 rounded-full bg-slate-100 text-xs">{c.status}</span></td>
+                  <td className="p-2">
+                    {c.delivery !== "email" ? <span className="text-slate-400 text-xs">—</span>
+                      : c.email_status === "sent" ? <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold">Envoyé</span>
+                      : c.email_status === "failed" ? <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-semibold" title={c.email_error || ""}>Échec</span>
+                      : c.status === "scheduled" ? <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">Programmé</span>
+                      : c.status === "pending" ? <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-xs">En attente commande</span>
+                      : <span className="text-slate-400 text-xs">—</span>}
+                  </td>
+                  <td className="p-2">
+                    {c.delivery === "email" && c.recipient_email && (
+                      <button onClick={() => resendEcard(c)} disabled={resending === c.id} data-testid={`admin-ecard-resend-${c.id}`}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-mint-200 text-mint-700 text-xs font-semibold hover:border-mint-400 disabled:opacity-40">
+                        <Send className="w-3 h-3" /> {resending === c.id ? "…" : "Renvoyer"}
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

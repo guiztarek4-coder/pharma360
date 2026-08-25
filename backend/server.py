@@ -49,6 +49,11 @@ def now_utc():
     return datetime.now(timezone.utc)
 
 
+def _algeria_date():
+    """Current calendar date in Algeria (UTC+1, no DST) as YYYY-MM-DD."""
+    return (datetime.now(timezone.utc) + timedelta(hours=1)).date().isoformat()
+
+
 def clean(doc):
     """Convert a mongo doc into a JSON-safe dict (str id, no raw ObjectId)."""
     if not doc:
@@ -1527,7 +1532,7 @@ async def update_order_status(order_id: str, payload: dict, admin: dict = Depend
     # E-cards: activate/schedule linked e-cards once the order is confirmed
     confirmed = status not in ("En attente", "En attente de paiement BaridiMob", "Annulée")
     if order and confirmed:
-        today = now_utc().date().isoformat()
+        today = _algeria_date()
         pending = await db.gift_cards.find({"order_id": order_id, "status": "pending"}).to_list(50)
         for card in pending:
             if card.get("scheduled_date") and card["scheduled_date"] > today:
@@ -1854,7 +1859,7 @@ def send_ecard_email(to: str, code: str, amount: float, message: str, sender: st
     api_key = os.environ.get("RESEND_API_KEY")
     if not api_key or not to:
         logger.warning("E-card email skipped (no key or recipient)")
-        return
+        return {"ok": False, "error": "Clé Resend manquante ou destinataire vide"}
     try:
         import resend
         resend.api_key = api_key
@@ -1873,33 +1878,41 @@ def send_ecard_email(to: str, code: str, amount: float, message: str, sender: st
           <p style="font-size:13px;color:#64748b">Utilisez ce code lors du paiement sur pharma360. Utilisable en plusieurs fois jusqu'à épuisement du montant.</p>
         </div>"""
         resend.Emails.send({"from": sender, "to": [to], "subject": "Votre E-carte cadeau Pharma360", "html": html})
+        return {"ok": True, "error": None}
     except Exception as e:
         logger.error("send_ecard_email failed: %s", e)
+        return {"ok": False, "error": str(e)}
 
 
 async def _issue_ecard(card: dict):
-    """Activate an e-card and send it by email if requested."""
+    """Activate an e-card and send it by email if requested. Records the email result."""
     updates = {"status": "active", "issued_at": now_utc().isoformat()}
-    await db.gift_cards.update_one({"_id": card["_id"]}, {"$set": updates})
     if card.get("delivery") == "email" and card.get("recipient_email"):
         s = await db.settings.find_one({"_id": "site"}) or {}
         sender = s.get("sender_email") or os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
-        await asyncio.to_thread(send_ecard_email, card["recipient_email"], card["code"],
-                                card["amount"], card.get("message", ""), sender)
+        res = await asyncio.to_thread(send_ecard_email, card["recipient_email"], card["code"],
+                                      card["amount"], card.get("message", ""), sender)
+        updates["email_status"] = "sent" if res.get("ok") else "failed"
+        updates["email_error"] = res.get("error")
+        updates["email_sent_at"] = now_utc().isoformat() if res.get("ok") else None
+    else:
+        updates["email_status"] = "print"
+    await db.gift_cards.update_one({"_id": card["_id"]}, {"$set": updates})
+    return updates.get("email_status")
 
 
 async def ecard_scheduler():
-    """Background loop: issue scheduled e-cards whose date has arrived."""
+    """Background loop: issue scheduled e-cards whose date has arrived (Algeria local date)."""
     while True:
         try:
-            today = now_utc().date().isoformat()
+            today = _algeria_date()
             cards = await db.gift_cards.find({"status": "scheduled"}).to_list(200)
             for c in cards:
                 if (c.get("scheduled_date") or "0000") <= today:
                     await _issue_ecard(c)
         except Exception as e:
             logger.error("ecard_scheduler error: %s", e)
-        await asyncio.sleep(120)
+        await asyncio.sleep(60)
 
 
 @api.post("/giftcard/validate")
@@ -1921,6 +1934,30 @@ async def my_giftcards(user: dict = Depends(get_current_user)):
 async def admin_giftcards(admin: dict = Depends(get_admin_user)):
     cards = await db.gift_cards.find({}).sort("created_at", -1).to_list(500)
     return [clean(c) for c in cards]
+
+
+@api.post("/admin/giftcards/{card_id}/resend")
+async def admin_resend_giftcard(card_id: str, admin: dict = Depends(get_admin_user)):
+    if not ObjectId.is_valid(card_id):
+        raise HTTPException(status_code=404, detail="E-carte introuvable")
+    card = await db.gift_cards.find_one({"_id": ObjectId(card_id)})
+    if not card:
+        raise HTTPException(status_code=404, detail="E-carte introuvable")
+    if card.get("delivery") != "email" or not card.get("recipient_email"):
+        raise HTTPException(status_code=400, detail="Cette carte n'a pas de destinataire email")
+    s = await db.settings.find_one({"_id": "site"}) or {}
+    sender = s.get("sender_email") or os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+    res = await asyncio.to_thread(send_ecard_email, card["recipient_email"], card["code"],
+                                  card["amount"], card.get("message", ""), sender)
+    await db.gift_cards.update_one({"_id": card["_id"]}, {"$set": {
+        "status": "active" if card.get("status") in ("pending", "scheduled") else card.get("status", "active"),
+        "email_status": "sent" if res.get("ok") else "failed",
+        "email_error": res.get("error"),
+        "email_sent_at": now_utc().isoformat() if res.get("ok") else None,
+    }})
+    if not res.get("ok"):
+        raise HTTPException(status_code=502, detail=f"Échec de l'envoi : {res.get('error')}")
+    return {"ok": True, "sent_to": card["recipient_email"]}
 
 
 # ----------------------------------------------------------------------------
