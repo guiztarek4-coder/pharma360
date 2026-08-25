@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 import bcrypt
 import httpx
 import jwt
+from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -150,12 +151,17 @@ class CustomerIn(BaseModel):
     phone: str
     email: Optional[str] = ""
     wilaya: str = ""
+    commune: str = ""
+    delivery_mode: str = "domicile"
+    relay_point: str = ""
     address: str
 
 
 class OrderIn(BaseModel):
     customer: CustomerIn
     items: List[OrderItemIn]
+    payment_method: str = "cod"
+    origin_url: Optional[str] = None
 
 
 class StatusIn(BaseModel):
@@ -500,10 +506,12 @@ async def send_admin_order_alert(order: dict):
 
 @api.get("/products")
 async def list_products(category: Optional[str] = None, search: Optional[str] = None,
-                        featured: Optional[bool] = None):
+                        subcategory: Optional[str] = None, featured: Optional[bool] = None):
     q = {}
     if category:
         q["category"] = category
+    if subcategory:
+        q["subcategory"] = subcategory
     if featured is not None:
         q["featured"] = featured
     if search:
@@ -521,9 +529,53 @@ async def get_product(product_id: str):
 
 @api.get("/categories")
 async def list_categories():
-    cats = await db.products.distinct("category")
     order = ["Soins Visage", "Dermatologie", "Hygiène & Corps", "Compléments", "Bébés"]
-    return sorted(cats, key=lambda c: order.index(c) if c in order else 99)
+    cats = await db.products.distinct("category")
+    cats = sorted(cats, key=lambda c: order.index(c) if c in order else 99)
+    out = []
+    for c in cats:
+        subs = await db.products.distinct("subcategory", {"category": c, "subcategory": {"$nin": ["", None]}})
+        out.append({"name": c, "subcategories": sorted(s for s in subs if s)})
+    return out
+
+
+async def notify_order(order: dict):
+    to = None
+    if order.get("user_id"):
+        user_doc = await db.users.find_one({"id": order["user_id"]})
+        to = (user_doc or {}).get("email")
+    to = to or order.get("customer", {}).get("email")
+    if to:
+        try:
+            await send_order_confirmation_email(order, to, order["customer"].get("name", ""))
+        except Exception as e:
+            logger.error(f"Email confirmation commande impossible: {e}")
+    try:
+        await send_admin_order_alert(order)
+    except Exception as e:
+        logger.error(f"Email alerte admin impossible: {e}")
+
+
+async def create_stripe_session(order: dict, origin: str) -> str:
+    stripe_checkout = StripeCheckout(
+        api_key=os.environ.get("STRIPE_API_KEY", "sk_test_emergent"),
+        webhook_url=f"{FRONTEND_URL}/api/webhook/stripe",
+    )
+    req = CheckoutSessionRequest(
+        amount=float(order["total"]), currency="dzd",
+        success_url=f"{origin}/commande/{order['id']}?session_id={{CHECKOUT_SESSION_ID}}",
+        cancel_url=f"{origin}/panier",
+        metadata={"order_id": order["id"]},
+    )
+    session = await stripe_checkout.create_checkout_session(req)
+    await db.payment_transactions.insert_one({
+        "session_id": session.session_id, "order_id": order["id"],
+        "amount": float(order["total"]), "currency": "dzd",
+        "status": "initiated", "payment_status": "pending",
+        "created_at": now().isoformat(), "updated_at": now().isoformat(),
+    })
+    await db.orders.update_one({"id": order["id"]}, {"$set": {"stripe_session_id": session.session_id}})
+    return session.url
 
 
 # ---------- Orders ----------
@@ -549,17 +601,25 @@ async def create_order(data: OrderIn, request: Request):
                           "unit_price": unit, "qty": it.qty})
     subtotal = round(total, 2)
     dcfg = ((await db.settings.find_one({"key": "site"})) or {}).get("delivery", DEFAULT_DELIVERY)
-    fee = next((w["fee"] for w in dcfg.get("wilayas", []) if w["name"] == data.customer.wilaya), 0)
+    w = next((x for x in dcfg.get("wilayas", []) if x["name"] == data.customer.wilaya), None)
+    if data.customer.delivery_mode == "relais" and w and w.get("relay_enabled") and data.customer.relay_point:
+        fee = w.get("relay_fee", 0)
+    else:
+        fee = w.get("fee", 0) if w else 0
     threshold = dcfg.get("free_threshold", 0)
     if dcfg.get("free_enabled") and threshold > 0 and subtotal >= threshold:
         fee = 0
     grand_total = round(subtotal + fee, 2)
     points = int(subtotal // 100) if user else 0
+    is_card = data.payment_method == "card"
     doc = {
         "id": uid(), "user_id": user["id"] if user else None,
         "customer": data.customer.model_dump(), "items": items_out,
         "subtotal": subtotal, "delivery_fee": fee,
-        "total": grand_total, "status": "en_attente", "payment": "Paiement à la livraison",
+        "total": grand_total, "status": "en_attente",
+        "payment": "Carte bancaire (en ligne)" if is_card else "Paiement à la livraison",
+        "payment_method": data.payment_method,
+        "payment_status": "en_attente" if is_card else "a_la_livraison",
         "points_earned": points, "points_credited": False,
         "created_at": now().isoformat(),
     }
@@ -567,22 +627,79 @@ async def create_order(data: OrderIn, request: Request):
     for it in data.items:
         await db.products.update_one({"id": it.product_id}, {"$inc": {"stock": -it.qty}})
     doc.pop("_id", None)
-    recipient = (user or {}).get("email") or data.customer.email
-    if recipient:
+    if is_card:
         try:
-            await send_order_confirmation_email(doc, recipient, data.customer.name)
+            doc["checkout_url"] = await create_stripe_session(doc, data.origin_url or FRONTEND_URL)
         except Exception as e:
-            logger.error(f"Email confirmation commande impossible: {e}")
-    try:
-        await send_admin_order_alert(doc)
-    except Exception as e:
-        logger.error(f"Email alerte admin impossible: {e}")
+            logger.error(f"Stripe session impossible: {e}")
+            raise HTTPException(502, "Impossible de créer la session de paiement en ligne")
+    else:
+        await notify_order(doc)
     return doc
 
 
 @api.get("/orders/my")
 async def my_orders(user=Depends(get_current_user)):
     return await db.orders.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+
+@api.get("/orders/{order_id}")
+async def get_order(order_id: str):
+    o = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not o:
+        raise HTTPException(404, "Commande introuvable")
+    return o
+
+
+async def mark_order_paid(order_id: str, session_id: str):
+    res = await db.orders.update_one({"id": order_id, "payment_status": {"$ne": "payee"}},
+                                     {"$set": {"payment_status": "payee"}})
+    await db.payment_transactions.update_one(
+        {"session_id": session_id},
+        {"$set": {"status": "completed", "payment_status": "paid", "updated_at": now().isoformat()}})
+    if res.modified_count:
+        order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+        if order:
+            await notify_order(order)
+
+
+@api.get("/orders/{order_id}/payment-status")
+async def order_payment_status(order_id: str, session_id: str):
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order or order.get("stripe_session_id") != session_id:
+        raise HTTPException(404, "Transaction introuvable")
+    if order.get("payment_status") != "payee":
+        try:
+            stripe_checkout = StripeCheckout(
+                api_key=os.environ.get("STRIPE_API_KEY", "sk_test_emergent"),
+                webhook_url=f"{FRONTEND_URL}/api/webhook/stripe",
+            )
+            st = await stripe_checkout.get_checkout_status(session_id)
+            if st.payment_status == "paid":
+                await mark_order_paid(order_id, session_id)
+                order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+        except Exception as e:
+            logger.error(f"Stripe status check impossible: {e}")
+    return {"payment_status": order.get("payment_status"), "status": order.get("status"), "total": order.get("total")}
+
+
+@api.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    body = await request.body()
+    sig = request.headers.get("Stripe-Signature", "")
+    stripe_checkout = StripeCheckout(
+        api_key=os.environ.get("STRIPE_API_KEY", "sk_test_emergent"),
+        webhook_url=f"{FRONTEND_URL}/api/webhook/stripe",
+    )
+    try:
+        wh = await stripe_checkout.handle_webhook(body, sig)
+    except Exception:
+        raise HTTPException(400, "Signature invalide")
+    if wh.event_type == "checkout.session.completed":
+        order_id = (wh.metadata or {}).get("order_id")
+        if order_id:
+            await mark_order_paid(order_id, wh.session_id)
+    return {"status": "ok"}
 
 
 # ---------- Favorites ----------
@@ -1036,6 +1153,44 @@ async def seed():
         await db.settings.insert_one(DEFAULT_SETTINGS)
     await db.settings.update_one({"key": "site", "delivery": {"$exists": False}},
                                  {"$set": {"delivery": DEFAULT_DELIVERY}})
+
+    subcats = {
+        "Sérum Anti-Âge à l'Extrait d'Olivier": "Sérums",
+        "Huile Botanique Réparatrice Bio": "Huiles & Baumes",
+        "Élixir Régénérant Rétinol & Olive": "Sérums",
+        "Baume Botanique Apaisant Peaux Sensibles": "Huiles & Baumes",
+        "Soin Purifiant Feuilles d'Olivier & Thé Vert": "Gels & Nettoyants",
+        "Complexe Phytothérapie Vitalité & Immunité": "Immunité",
+        "Crème Hydratante Jour Aloe & Olive": "Crèmes",
+        "Gel Lavant Doux Bébé": "Toilette bébé",
+        "Lait Corps Nourrissant Karité": "Laits & Crèmes corps",
+        "Magnésium Marin + Vitamine B6": "Anti-fatigue",
+        "Eau Thermale Apaisante Spray": "Eaux & Sprays",
+        "Shampooing Doux Bébé & Olive": "Toilette bébé",
+    }
+    async for p in db.products.find({"subcategory": {"$exists": False}}):
+        if p["name"] in subcats:
+            await db.products.update_one({"id": p["id"]}, {"$set": {"subcategory": subcats[p["name"]]}})
+
+    s = await db.settings.find_one({"key": "site"})
+    if s and s.get("delivery"):
+        changed = False
+        for w in s["delivery"].get("wilayas", []):
+            for field, default in [("cities", []), ("relay_enabled", False), ("relay_fee", 0), ("relay_points", [])]:
+                if field not in w:
+                    w[field] = default
+                    changed = True
+            if w["name"] == "Alger" and not w.get("relay_points"):
+                w["cities"] = ["Saïd Hamdine", "Bir Mourad Raïs", "Alger Centre", "Hydra", "El Biar", "Kouba", "Bab Ezzouar", "Draria"]
+                w["relay_enabled"] = True
+                w["relay_fee"] = 200
+                w["relay_points"] = ["Pharmacie L'olivier — Saïd Hamdine (retrait boutique)",
+                                     "Point relais Bab Ezzouar — Centre commercial",
+                                     "Point relais Hydra — Rue des Frères"]
+                changed = True
+        if changed:
+            await db.settings.update_one({"key": "site"}, {"$set": {"delivery": s["delivery"]}})
+
     if not await db.loyalty_config.find_one({"key": "loyalty"}):
         await db.loyalty_config.insert_one(DEFAULT_LOYALTY)
     logger.info("Seed terminé")

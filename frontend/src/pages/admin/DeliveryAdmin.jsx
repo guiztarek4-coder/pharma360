@@ -3,11 +3,13 @@ import { toast } from "sonner";
 import { Save, Truck, Mail, Search, Gift } from "lucide-react";
 import { api, apiError } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function DeliveryAdmin() {
   const [delivery, setDelivery] = useState(null);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(null);
 
   useEffect(() => {
     api.get("/admin/settings").then((r) => setDelivery(r.data.delivery)).catch(() => {});
@@ -96,11 +98,63 @@ export default function DeliveryAdmin() {
                 <input type="number" value={w.fee} onChange={(e) => setFee(w.code, e.target.value)}
                   data-testid={`wilaya-fee-${w.code}`} className="input-field !w-24 !py-1.5 text-right font-mono text-xs" />
                 <span className="text-xs text-stone2">DA</span>
+                <button onClick={() => setEditing({ ...w })} data-testid={`wilaya-config-${w.code}`}
+                  className="rounded-full border border-brand px-3 py-1.5 text-xs font-semibold text-brand transition-colors hover:bg-brand-pale">
+                  Relais & villes
+                </button>
               </span>
             </div>
           ))}
         </div>
       </div>
+
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="max-w-md" data-testid="wilaya-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-xl">{editing?.code} — {editing?.name}</DialogTitle>
+          </DialogHeader>
+          {editing && (
+            <div className="mt-2 space-y-4">
+              <label className="block">
+                <span className="text-xs font-semibold text-stone2">Communes / villes (1 par ligne — vide = saisie libre au checkout)</span>
+                <textarea rows={4} value={(editing.cities || []).join("\n")} data-testid="wilaya-cities-input"
+                  onChange={(e) => setEditing({ ...editing, cities: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) })}
+                  className="input-field mt-1.5 resize-none text-sm" placeholder="Ex. Saïd Hamdine&#10;Hydra&#10;Bab Ezzouar" />
+              </label>
+              <div className="flex items-center justify-between rounded-xl bg-sand px-4 py-3">
+                <span className="text-sm font-semibold text-obsidian">Points relais activés</span>
+                <Switch checked={!!editing.relay_enabled} data-testid="relay-toggle"
+                  onCheckedChange={(v) => setEditing({ ...editing, relay_enabled: v })} />
+              </div>
+              {editing.relay_enabled && (
+                <>
+                  <label className="block">
+                    <span className="text-xs font-semibold text-stone2">Tarif point relais (DA)</span>
+                    <input type="number" value={editing.relay_fee ?? 0} data-testid="relay-fee-input"
+                      onChange={(e) => setEditing({ ...editing, relay_fee: parseInt(e.target.value) || 0 })}
+                      className="input-field mt-1.5 font-mono" />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-semibold text-stone2">Points relais (1 par ligne)</span>
+                    <textarea rows={4} value={(editing.relay_points || []).join("\n")} data-testid="relay-points-input"
+                      onChange={(e) => setEditing({ ...editing, relay_points: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) })}
+                      className="input-field mt-1.5 resize-none text-sm" placeholder="Ex. Pharmacie L'olivier — Saïd Hamdine" />
+                  </label>
+                </>
+              )}
+              <button
+                onClick={() => {
+                  setDelivery((d) => ({ ...d, wilayas: d.wilayas.map((w) => (w.code === editing.code ? editing : w)) }));
+                  setEditing(null);
+                  toast.success(`${editing.name} mis à jour — pensez à enregistrer`);
+                }}
+                data-testid="wilaya-dialog-save" className="btn-brand w-full">
+                Appliquer
+              </button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <button onClick={save} disabled={saving} className="btn-brand disabled:opacity-50" data-testid="delivery-save">
         <Save size={15} /> {saving ? "Enregistrement…" : "Enregistrer les paramètres"}

@@ -14,6 +14,7 @@ export default function Catalog() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const activeCat = searchParams.get("categorie") || "";
+  const activeSub = searchParams.get("sc") || "";
 
   useEffect(() => {
     api.get("/categories").then((r) => setCategories(r.data)).catch(() => {});
@@ -23,12 +24,13 @@ export default function Catalog() {
     setLoading(true);
     const params = {};
     if (activeCat) params.category = activeCat;
+    if (activeSub) params.subcategory = activeSub;
     if (search) params.search = search;
     api.get("/products", { params })
       .then((r) => setProducts(r.data))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [activeCat, search]);
+  }, [activeCat, activeSub, search]);
 
   return (
     <div className="mx-auto max-w-7xl px-6 pb-24 pt-32" data-testid="catalog-page">
@@ -55,9 +57,9 @@ export default function Catalog() {
             Tout
           </button>
           {categories.map((cat) => (
-            <button key={cat} onClick={() => setSearchParams({ categorie: cat })} data-testid={`filter-${cat.toLowerCase().replace(/[^a-z]+/g, "-")}`}
-              className={`rounded-full px-4 py-2 text-xs font-semibold transition-all ${activeCat === cat ? "bg-brand text-bone" : "border bg-white text-obsidian/70 hover:border-brand hover:text-brand"}`}>
-              {cat}
+            <button key={cat.name} onClick={() => setSearchParams({ categorie: cat.name })} data-testid={`filter-${cat.name.toLowerCase().replace(/[^a-z]+/g, "-")}`}
+              className={`rounded-full px-4 py-2 text-xs font-semibold transition-all ${activeCat === cat.name ? "bg-brand text-bone" : "border bg-white text-obsidian/70 hover:border-brand hover:text-brand"}`}>
+              {cat.name}
             </button>
           ))}
         </div>
@@ -67,6 +69,22 @@ export default function Catalog() {
             data-testid="catalog-search" className="input-field !pl-10" />
         </div>
       </div>
+
+      {activeCat && (categories.find((c) => c.name === activeCat)?.subcategories?.length > 0) && (
+        <div className="mt-4 flex flex-wrap items-center gap-2" data-testid="subcategory-filters">
+          <span className="badge-mono mr-1 text-stone2">Sous-catégories :</span>
+          <button onClick={() => setSearchParams({ categorie: activeCat })} data-testid="subfilter-all"
+            className={`rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition-all ${!activeSub ? "bg-terra text-white" : "border bg-white text-obsidian/70 hover:border-terra hover:text-terra"}`}>
+            Toutes
+          </button>
+          {categories.find((c) => c.name === activeCat).subcategories.map((sc) => (
+            <button key={sc} onClick={() => setSearchParams({ categorie: activeCat, sc })} data-testid={`subfilter-${sc.toLowerCase().replace(/[^a-z]+/g, "-")}`}
+              className={`rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition-all ${activeSub === sc ? "bg-terra text-white" : "border bg-white text-obsidian/70 hover:border-terra hover:text-terra"}`}>
+              {sc}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <div className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">

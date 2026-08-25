@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Minus, Plus, Trash2, ShoppingBag, CheckCircle2, Sparkles } from "lucide-react";
+import { Minus, Plus, Trash2, ShoppingBag, CheckCircle2, Sparkles, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { api, fmtPrice, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -11,7 +11,7 @@ export default function Cart() {
   const { user } = useAuth();
   const { items, setQty, removeFromCart, clearCart, total, priceOf } = useCart();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: user?.name || "", phone: user?.phone || "", email: user?.email || "", address: "", wilaya: "" });
+  const [form, setForm] = useState({ name: user?.name || "", phone: user?.phone || "", email: user?.email || "", address: "", wilaya: "", commune: "", delivery_mode: "domicile", relay_point: "", payment_method: "cod" });
   const [placing, setPlacing] = useState(false);
   const [done, setDone] = useState(null);
   const [delivery, setDelivery] = useState(null);
@@ -20,9 +20,13 @@ export default function Cart() {
     api.get("/delivery").then((r) => setDelivery(r.data)).catch(() => {});
   }, []);
 
+  const wilayaObj = delivery?.wilayas.find((w) => w.name === form.wilaya);
+  const relayAvailable = !!(wilayaObj?.relay_enabled && wilayaObj?.relay_points?.length);
+  const mode = relayAvailable ? form.delivery_mode : "domicile";
+
   const shippingFee = (() => {
     if (!delivery || !form.wilaya) return 0;
-    const fee = delivery.wilayas.find((w) => w.name === form.wilaya)?.fee ?? 0;
+    const fee = mode === "relais" ? (wilayaObj?.relay_fee ?? 0) : (wilayaObj?.fee ?? 0);
     if (delivery.free_enabled && delivery.free_threshold > 0 && total >= delivery.free_threshold) return 0;
     return fee;
   })();
@@ -34,9 +38,15 @@ export default function Cart() {
     setPlacing(true);
     try {
       const { data } = await api.post("/orders", {
-        customer: form,
+        customer: { ...form, delivery_mode: mode, relay_point: mode === "relais" ? form.relay_point : "" },
         items: items.map((i) => ({ product_id: i.product.id, qty: i.qty })),
+        payment_method: form.payment_method,
+        origin_url: window.location.origin,
       });
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+        return;
+      }
       setDone(data);
       clearCart();
     } catch (err) {
@@ -135,15 +145,52 @@ export default function Cart() {
                   data-testid="checkout-phone" className="input-field" />
                 <input type="email" placeholder="Email (recevoir la confirmation de commande)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
                   data-testid="checkout-email" className="input-field" />
-                <select required value={form.wilaya} onChange={(e) => setForm({ ...form, wilaya: e.target.value })}
+                <select required value={form.wilaya} onChange={(e) => setForm({ ...form, wilaya: e.target.value, commune: "", relay_point: "", delivery_mode: "domicile" })}
                   data-testid="checkout-wilaya" className="input-field">
                   <option value="">Wilaya de livraison…</option>
                   {(delivery?.wilayas || []).map((w) => (
                     <option key={w.code} value={w.name}>{w.code} — {w.name} ({w.fee} DA)</option>
                   ))}
                 </select>
-                <textarea required placeholder="Adresse de livraison complète" rows={3} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })}
+                {form.wilaya && (wilayaObj?.cities?.length ? (
+                  <select required value={form.commune} onChange={(e) => setForm({ ...form, commune: e.target.value })}
+                    data-testid="checkout-commune" className="input-field">
+                    <option value="">Commune…</option>
+                    {wilayaObj.cities.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                ) : (
+                  <input required placeholder="Commune" value={form.commune} onChange={(e) => setForm({ ...form, commune: e.target.value })}
+                    data-testid="checkout-commune" className="input-field" />
+                ))}
+                {relayAvailable && (
+                  <div className="grid grid-cols-2 gap-2" data-testid="delivery-mode">
+                    {[["domicile", `À domicile — ${wilayaObj.fee} DA`], ["relais", `Point relais — ${wilayaObj.relay_fee} DA`]].map(([v, l]) => (
+                      <button type="button" key={v} onClick={() => setForm({ ...form, delivery_mode: v })} data-testid={`delivery-mode-${v}`}
+                        className={`rounded-xl border px-3 py-2.5 text-xs font-semibold transition-all ${mode === v ? "border-brand bg-brand-pale text-brand" : "text-stone2"}`}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {relayAvailable && mode === "relais" && (
+                  <select required value={form.relay_point} onChange={(e) => setForm({ ...form, relay_point: e.target.value })}
+                    data-testid="checkout-relay-point" className="input-field">
+                    <option value="">Choisir le point relais…</option>
+                    {wilayaObj.relay_points.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                )}
+                <textarea required placeholder="Adresse (rue, immeuble, repère…)" rows={3} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })}
                   data-testid="checkout-address" className="input-field resize-none" />
+                <div className="grid grid-cols-2 gap-2" data-testid="payment-method">
+                  <button type="button" onClick={() => setForm({ ...form, payment_method: "cod" })} data-testid="payment-cod"
+                    className={`rounded-xl border px-3 py-2.5 text-xs font-semibold transition-all ${form.payment_method === "cod" ? "border-brand bg-brand-pale text-brand" : "text-stone2"}`}>
+                    Paiement à la livraison
+                  </button>
+                  <button type="button" onClick={() => setForm({ ...form, payment_method: "card" })} data-testid="payment-card"
+                    className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-semibold transition-all ${form.payment_method === "card" ? "border-brand bg-brand-pale text-brand" : "text-stone2"}`}>
+                    <CreditCard size={13} /> Carte bancaire
+                  </button>
+                </div>
               </div>
               <div className="mt-6 space-y-2 border-t pt-5">
                 <div className="flex justify-between text-sm text-stone2">
@@ -167,7 +214,7 @@ export default function Cart() {
               </div>
               <button type="submit" disabled={placing} data-testid="place-order-button"
                 className="btn-brand mt-6 w-full disabled:opacity-50">
-                {placing ? "Envoi en cours…" : "Confirmer la commande"}
+                {placing ? "Envoi en cours…" : form.payment_method === "card" ? "Payer par carte" : "Confirmer la commande"}
               </button>
               {!user && (
                 <p className="mt-3 text-center text-xs text-stone2">

@@ -19,6 +19,7 @@ import Account from "@/pages/Account";
 import Loyalty from "@/pages/Loyalty";
 import Auth from "@/pages/Auth";
 import ResetPassword from "@/pages/ResetPassword";
+import OrderConfirmation from "@/pages/OrderConfirmation";
 import Admin from "@/pages/admin/Admin";
 
 export default function App() {
@@ -46,6 +47,7 @@ export default function App() {
                   <Route path="/compte" element={<Account />} />
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/reinitialiser" element={<ResetPassword />} />
+                  <Route path="/commande/:id" element={<OrderConfirmation />} />
                   <Route path="/admin" element={<Admin />} />
                 </Routes>
               </main>

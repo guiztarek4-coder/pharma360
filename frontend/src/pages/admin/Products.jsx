@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { api, fmtPrice, apiError } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-const EMPTY = { name: "", description: "", category: "Soins Visage", price: "", member_price: "", stock: 0, image: "", featured: false };
+const EMPTY = { name: "", description: "", category: "Soins Visage", subcategory: "", price: "", member_price: "", stock: 0, image: "", featured: false };
 
 export default function Products() {
   const [products, setProducts] = useState([]);
@@ -79,7 +79,7 @@ export default function Products() {
           <select value={catFilter} onChange={(e) => { setCatFilter(e.target.value); }} data-testid="admin-category-filter"
             className="input-field !w-auto !py-2 text-xs font-semibold">
             <option value="">Toutes les catégories</option>
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            {categories.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
           </select>
           <button onClick={toggleAll} data-testid="select-category-button"
             className="rounded-full border px-4 py-2 text-xs font-semibold text-obsidian/70 transition-colors hover:border-brand hover:text-brand">
@@ -178,6 +178,8 @@ export default function Products() {
               data-testid="product-form-category" className="input-field">
               {["Soins Visage", "Dermatologie", "Hygiène & Corps", "Compléments", "Bébés"].map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
+            <input placeholder="Sous-catégorie (ex. Sérums, Crèmes…)" value={form.subcategory || ""} onChange={(e) => setForm({ ...form, subcategory: e.target.value })}
+              data-testid="product-form-subcategory" className="input-field" />
             <textarea placeholder="Description" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
               data-testid="product-form-description" className="input-field resize-none" />
             <div className="grid grid-cols-3 gap-3">

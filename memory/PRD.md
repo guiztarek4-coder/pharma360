@@ -14,6 +14,7 @@ Créer un nouveau site e-commerce de parapharmacie « L'olivier », réplique fo
 - Admin : back-office complet
 
 ## Implémenté (24/08/2026)
+- Parité Pharma360 étendue : sous-catégories produits (filtrage catalogue, champ admin, 12 produits migrés) ; livraison avancée — communes par wilaya (liste ou saisie libre), points relais par wilaya (activable, tarif propre, liste de points, Alger pré-configuré avec 8 communes + 3 relais à 200 DA) éditables via dialog dans « Livraison & Alertes » ; paiement carte en ligne en mode TEST (Stripe checkout hébergé, DZD, redirection, page /commande/:id avec vérification et polling, webhook /api/webhook/stripe, emails envoyés après paiement confirmé). NOTE : Stripe n'opère pas en Algérie — sandbox auto impossible (DZ non supporté), clé de test partagée utilisée ; pour la production il faudra CIB/Edahabia ou un compte Stripe d'un pays supporté
 - Alertes admin + frais de livraison : email récapitulatif envoyé à l'admin à chaque nouvelle commande (adresse configurable dans l'onglet « Livraison & Alertes », vide par défaut car le proxy refuse les domaines inexistants) ; 58 wilayas avec frais par défaut (Alger 400, proches 500, autres 600–1200 DA) éditables une par une ; livraison offerte au-dessus d'un seuil (activable/désactivable, défaut 10 000 DA) ; checkout avec sélecteur de wilaya, calcul en direct sous-total + livraison + total, frais affichés dans les commandes client et admin et dans les emails
 - Emails transactionnels réels via Resend managé (proxy Emergent) : confirmation de commande (membre ou invité avec email, template HTML brandé L'olivier, détail articles + total + points) et lien de réinitialisation mot de passe (valable 1h, plus de mode démo). Champ email ajouté au checkout. Gate anti-phishing (liens https first-party, pas de formulaires) appliqué à chaque envoi.
 - Auth JWT complète : inscription, connexion, mot de passe oublié + réinitialisation (lien démo affiché), protection brute-force
@@ -32,6 +33,6 @@ Créer un nouveau site e-commerce de parapharmacie « L'olivier », réplique fo
 ## Backlog
 - P1 : notifications admin (nouvelle commande / nouveau message chat), badge non-lus sur le chat
 - P1 : upload d'images produits (object storage) au lieu d'URL
-- P2 : paiement en ligne (Stripe/CIB)
+- P2 : paiement production Algérie (CIB/Edahabia SATIM) — Stripe indisponible en DZ ; bascule Stripe live si compte pays supporté
 - P2 : historique des points (journal des gains)
 - P3 : mode sombre complet, avis clients produits
